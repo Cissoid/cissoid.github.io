@@ -1,0 +1,84 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=theme-color content="#F5F7F9"><title>Python 中的多重继承顺序 | B-log</title><link rel=stylesheet href=/css/minimalism.css><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-67524885-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body><header><div class=container><h1><a href=/>B-log</a></h1><nav><ul><li>&nbsp;|&nbsp;</li><li><a href=/post/>Post</a></li><li>&nbsp;|&nbsp;</li><li><a href=/about/>About</a></li><li>&nbsp;|&nbsp;</li></ul></nav></div><hr></header><main><article class=post><header><h1>Python 中的多重继承顺序</h1><ul class=description><li><time>2017-11-16</time></li></ul></header><section class=license><p><a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/><img alt="Creative Commons License" src=https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png></a><br>This work is licensed under a <a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/>Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.</p></section><section class=post><p>最近发现中文互联网中的很多文章对 Python 在多重继承时中基类查找顺序有如下说法:
+old style class 使用深度优先遍历, new style class 使用广度优先遍历.
+然而实际上 new style class 真的是使用广度优先遍历吗?</p><h1 id=广度优先>广度优先?</h1><p>有如下代码, 试问, 执行代码后会输出什么?</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=color:#66d9ef>class</span> <span style=color:#a6e22e>A</span>(object):
+    <span style=color:#66d9ef>def</span> __init__(self):
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74>&#39;A.init&#39;</span>)
+        super(A, self)<span style=color:#f92672>.</span>__init__()
+
+    <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>func</span>(self):
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74>&#39;A.func&#39;</span>)
+
+
+<span style=color:#66d9ef>class</span> <span style=color:#a6e22e>B</span>(A):
+    <span style=color:#66d9ef>def</span> __init__(self):
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74>&#39;B.init&#39;</span>)
+        super(B, self)<span style=color:#f92672>.</span>__init__()
+
+
+<span style=color:#66d9ef>class</span> <span style=color:#a6e22e>C</span>(object):
+    <span style=color:#66d9ef>def</span> __init__(self):
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74>&#39;C.init&#39;</span>)
+        super(C, self)<span style=color:#f92672>.</span>__init__()
+
+    <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>func</span>(self):
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74>&#39;C.func&#39;</span>)
+
+
+<span style=color:#66d9ef>class</span> <span style=color:#a6e22e>D</span>(B, C):
+    <span style=color:#66d9ef>def</span> __init__(self):
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74>&#39;D.init&#39;</span>)
+        super(D, self)<span style=color:#f92672>.</span>__init__()
+
+
+<span style=color:#66d9ef>if</span> __name__ <span style=color:#f92672>==</span> <span style=color:#e6db74>&#39;__main__&#39;</span>:
+    d <span style=color:#f92672>=</span> D()
+    d<span style=color:#f92672>.</span>func()
+</code></pre></div><p>类的继承顺序是这样的.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>  O
+   \
+    A       O
+     \     /
+      B   C
+       \ /
+        D
+</code></pre></div><p>如果按照广度优先的查找顺序, class D 的 MRO 应该为 D -> B -> C -> A -> O, 因此 init
+时的顺序也应当是这样. 而调用 func() 方法时, 由于广度优先, 会首先查找到 class C,
+因此会调用 C.func(). 所以程序输出应该是:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>D.init
+B.init
+C.init
+A.init
+C.func
+</code></pre></div><p>然而执行程序后, 会发现实际的输出是这样的:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>D.init
+B.init
+A.init
+C.init
+A.func
+</code></pre></div><p>很明显查找顺序并不是广度优先的, 看起来倒像是深度优先了.</p><h1 id=深度优先>深度优先?</h1><p>稍微改动一点代码, 让 class C 也继承自 class A:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=color:#66d9ef>class</span> <span style=color:#a6e22e>C</span>(A):
+    <span style=color:#66d9ef>def</span> __init__(self):
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74>&#39;C.init&#39;</span>)
+        super(C, self)<span style=color:#f92672>.</span>__init__()
+
+    <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>func</span>(self):
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74>&#39;C.func&#39;</span>)
+</code></pre></div><p>此时, 继承结构变成这样.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>  O
+   \
+    A
+   / \
+  B   C
+   \ /
+    D
+</code></pre></div><p>按照深度优先的便利顺序, 应为 D -> B -> A -> O -> C. 调用 D.func 实际应调用到 A.func.
+再次执行, 会得到这样的输出:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>D.init
+B.init
+C.init
+A.init
+C.func
+</code></pre></div><p>可以看到调用的是 C.func, 所以深度优先的查找顺序也不符合实际情况.</p><h1 id=oh-my-holy-c3>Oh My Holy C3</h1><p>实际上, Python 在 new style class 中使用的是 C3 算法来计算多重继承顺序的. 所谓 C3
+算法, 大致是这样一个流程.</p><ol><li>object 类的继承顺序还是 object, 记为 <code>L[O] = O</code>.</li><li>对于 <code>class A(object)</code>, 其继承顺序为 [A, O], 记为 <code>L[A] = AO</code>.</li><li>对于 <code>class B(A)</code>, 其继承顺序为 <code>L[B] = B + merge(L[A], A)</code>.</li><li>对于 <code>class C(A, B)</code>, 其继承顺序为 <code>L[C] = C + merge(L[A], L[B], AB)</code>.</li><li>以上 <code>merge</code> 的处理逻辑如下: 对于其中所有序列, 依次从前往后取, 若当前第一个类只出现在所有其他序列的头部,
+则认为这个类可以提出, 否则跳过到下一个序列继续, 直到全部类都被提出.</li></ol><p>单看规则有点干巴巴的, 以这张图为例.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>  O
+   \
+    A
+   / \
+  B   C
+   \ /
+    D
+</code></pre></div><p>按照上述规则, 可得</p><ul><li>L[O] = O</li><li>L[A] = AO</li><li>L[B] = B + merge(AO, A) = BAO</li><li>L[C] = C + merge(AO, A) = CAO</li><li>L[D] = D + merge(BAO, CAO, BC) = DBCAO</li></ul><p>因此, 在这个例子中, D.func 实际上会调用 C.func, 因为 C 的查找顺序在 A 之前.</p><h1 id=reference>Reference</h1><ul><li><a href=https://www.python.org/download/releases/2.3/mro/>The Python 2.3 Method Resolution Order</a></li></ul></section></article></main><footer><hr><div class=container><div class=copyright>&copy;2017-2019 By cissoid.</div><div class=about>Built with <a href=https://gohugo.io>Hugo</a>, using theme <a href=https://github.com/cissoid/hugo-theme-minimalism>Minimalism</a>.</div></div></footer><div id=mask><div id=loading><div></div></div></div><script src=/js/minimalism.js></script></body></html>

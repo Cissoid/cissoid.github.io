@@ -1,0 +1,78 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Let's Encrypt on B-log</title><link>https://blog.wxh.me/tags/lets-encrypt/</link><description>Recent content in Let's Encrypt on B-log</description><generator>Hugo -- gohugo.io</generator><language>zh-cn</language><copyright>cissoid</copyright><lastBuildDate>Thu, 25 May 2017 15:40:11 +0800</lastBuildDate><atom:link href="https://blog.wxh.me/tags/lets-encrypt/index.xml" rel="self" type="application/rss+xml"/><item><title>Let's Encrypt 证书在 Nginx 上的配置方法</title><link>https://blog.wxh.me/post/2017/05/letsencrypt-configuration-with-nginx/</link><pubDate>Thu, 25 May 2017 15:40:11 +0800</pubDate><guid>https://blog.wxh.me/post/2017/05/letsencrypt-configuration-with-nginx/</guid><description>&lt;p>在现如今运营商劫持已变得司空见惯, 同时网络安全形势愈发严峻的大环境下, 为自己的网站上全站
+HTTPS 是很有必要的. 然而个人小站用每年 N 美刀的付费证书似乎又没有必要, 如果有免费的解决方案当然最好不过.&lt;/p>
+&lt;p>曾经有一个还不错的免费证书提供商 &lt;a href="https://www.startssl.com">StartSSL&lt;/a>, 但后来,
+该公司被中国公司沃通 (WoSign) 收购, 并且做出了一些比较龌龊的事, 导致 Mozilla 和 Google
+都相继宣布不再信任该公司签发的证书, 所以现在还是放弃这家吧&amp;hellip;&lt;/p>
+&lt;p>Let&amp;rsquo;s Encrypt 算是最近几年比较流行的免费 HTTPS 证书方案了,
+但它的证书申请方式和其他一手交钱一手交货的证书分发机构不太一样, 因此在这里记录一下自己的申请过程.&lt;/p>
+&lt;h1 id="申请-lets-encrypt-证书">申请 Let&amp;rsquo;s Encrypt 证书&lt;/h1>
+&lt;h3 id="1-安装-certbot">1. 安装 certbot.&lt;/h3>
+&lt;p>&lt;a href="https://letsencrypt.org">Let&amp;rsquo;s Encrypt 官网&lt;/a> 推荐使用的 ACME 客户端是 &lt;a href="https://certbot.eff.org">Certbot&lt;/a>,
+其在各个平台下的安装方法可见官网. Ubuntu 下, 可以直接添加 ppa 源进行安装:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-shell" data-lang="shell">sudo apt-get install software-properties-common
+sudo add-apt-repository ppa:certbot/certbot
+sudo apt-get update
+sudo apt-get install certbot
+&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="2-配置-nginx-以便使用-webroot-方式申请证书">2. 配置 Nginx, 以便使用 webroot 方式申请证书.&lt;/h3>
+&lt;p>Certbot 提供了两种方式方式验证域名所有权:&lt;/p>
+&lt;ol>
+&lt;li>standalone 方式, 临时启动一个监听 443 端口的服务, Let&amp;rsquo;s Encrypt
+服务器会访问这个服务来确认你是域名的所有者.&lt;/li>
+&lt;li>webroot 方式, 访问 &lt;a href="http://yourdomain.com/.well-known/">http://yourdomain.com/.well-known/&lt;/a> 目录下的指定文件来验证身份.&lt;/li>
+&lt;/ol>
+&lt;p>standalone 的方式看似要简单一点, 但有一个问题, 如果使用这种方式验证域名的话,
+以后更新证书时, 也需要用同样的方式, 所以如果你有业务监听 443 端口的话,
+每次更新证书时都要停掉业务&amp;hellip;基本上, 还是不要用这种方式比较好.&lt;/p>
+&lt;p>为了使用 webroot 方式验证, 在 Nginx 中增加以下配置:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-nginx" data-lang="nginx"> &lt;span style="color:#66d9ef">location&lt;/span> ~ &lt;span style="color:#e6db74">/.well-known&lt;/span> {
+&lt;span style="color:#f92672">root&lt;/span> &lt;span style="color:#e6db74">/var/www/letsencrypt&lt;/span>;
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>这里我把 webroot 路径设为 /var/www/letsencrypt. 当然也可以任意设置, 只要确认有访问权限即可.&lt;/p>
+&lt;h3 id="3-申请证书">3. 申请证书&lt;/h3>
+&lt;p>申请证书的步骤 Certbot 官网上都有, 无非就是执行 &lt;code>sudo certbot certonly&lt;/code>
+后按照提示选择即可, 需要注意的是在输入 webroot 的地方需要填入上一步 Nginx
+中设置的 &lt;code>root&lt;/code> 路径.&lt;/p>
+&lt;p>申请成功后, 证书放在 &lt;code>/etc/letsencrypt/live/yourdomain.com/&lt;/code> 目录下, 包含 4 个文件:
+&lt;code>privkey.pem&lt;/code>, &lt;code>fullchain.pem&lt;/code>, &lt;code>chain.pem&lt;/code>, &lt;code>cert.pem&lt;/code>, 对每个文件的描述可见 README:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-text" data-lang="text">This directory contains your keys and certificates.
+`privkey.pem` : the private key for your certificate.
+`fullchain.pem`: the certificate file used in most server software.
+`chain.pem` : used for OCSP stapling in Nginx &amp;gt;=1.3.7.
+`cert.pem` : will break many server configurations, and should not be used
+without reading further documentation (see link below).
+We recommend not moving these files. For more information, see the Certbot
+User Guide at https://certbot.eff.org/docs/using.html#where-are-my-certificates.
+&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="4-配置自动更新">4. 配置自动更新&lt;/h3>
+&lt;p>由于 Let&amp;rsquo;s Encrypt 证书只有 3 个月的有效期, 到期前需要更新证书, 因此可以在 crontab
+中增加计划任务来自动做这件事. 执行 &lt;code>sudo crontab -e&lt;/code> 后输入:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-text" data-lang="text">0 2 * * * /usr/bin/certbot renew -q --renew-hook &amp;#34;/bin/systemctl reload nginx&amp;#34; &amp;gt;&amp;gt;/var/log/certbot.log 2&amp;gt;&amp;amp;1 &amp;amp;
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>这个计划任务的作用是每天 2 点调用 certbot 自动更新证书, 若更新成功, 就重新加载 Nginx 配置.&lt;/p>
+&lt;p>至此, 证书就申请好了.&lt;/p>
+&lt;h1 id="在-nginx-中配置并使用证书">在 Nginx 中配置并使用证书&lt;/h1>
+&lt;p>由于 Nginx 默认使用的是 1024 位 的 DHE 密钥, 为了进一步加强连接的安全性,
+我们可以生成更高强度的密钥. 执行 &lt;code>sudo openssl dhparam -out /etc/ssl/certs/dhparam.pem 4096&lt;/code>
+来生成 4096 位的密钥, 并保存到 &lt;code>/etc/ssl/certs&lt;/code> 目录下.&lt;/p>
+&lt;p>在 Nginx 中增加以下配置:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-nginx" data-lang="nginx">&lt;span style="color:#66d9ef">server&lt;/span> {
+&lt;span style="color:#f92672">ssl_certificate&lt;/span> &lt;span style="color:#e6db74">/etc/letsencrypt/live/yourdomain.com/fullchain.pem&lt;/span>;
+&lt;span style="color:#f92672">ssl_certificate_key&lt;/span> &lt;span style="color:#e6db74">/etc/letsencrypt/live/yourdomain.com/privkey.pem&lt;/span>;
+&lt;span style="color:#f92672">ssl_trusted_certificate&lt;/span> &lt;span style="color:#e6db74">/etc/letsencrypt/live/yourdomain.com/chain.pem&lt;/span>;
+&lt;span style="color:#f92672">ssl_protocols&lt;/span> &lt;span style="color:#e6db74">TLSv1&lt;/span> &lt;span style="color:#e6db74">TLSv1.1&lt;/span> &lt;span style="color:#e6db74">TLSv1.2&lt;/span>;
+&lt;span style="color:#f92672">ssl_prefer_server_ciphers&lt;/span> &lt;span style="color:#66d9ef">on&lt;/span>;
+&lt;span style="color:#f92672">ssl_ciphers&lt;/span> &lt;span style="color:#e6db74">&amp;#34;EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH&amp;#34;&lt;/span>;
+&lt;span style="color:#f92672">ssl_ecdh_curve&lt;/span> &lt;span style="color:#e6db74">secp384r1&lt;/span>;
+&lt;span style="color:#f92672">ssl_session_cache&lt;/span> &lt;span style="color:#e6db74">shared:SSL:10m&lt;/span>;
+&lt;span style="color:#f92672">ssl_session_tickets&lt;/span> &lt;span style="color:#66d9ef">off&lt;/span>;
+&lt;span style="color:#f92672">ssl_stapling&lt;/span> &lt;span style="color:#66d9ef">on&lt;/span>;
+&lt;span style="color:#f92672">ssl_stapling_verify&lt;/span> &lt;span style="color:#66d9ef">on&lt;/span>;
+&lt;span style="color:#f92672">add_header&lt;/span> &lt;span style="color:#e6db74">Strict-Transport-Security&lt;/span> &lt;span style="color:#e6db74">&amp;#34;max-age=63072000&lt;/span>; &lt;span style="color:#f92672">includeSubDomains&lt;/span>; &lt;span style="color:#f92672">preload&amp;#34;&lt;/span>;
+&lt;span style="color:#f92672">add_header&lt;/span> &lt;span style="color:#e6db74">X-Frame-Options&lt;/span> &lt;span style="color:#e6db74">DENY&lt;/span>;
+&lt;span style="color:#f92672">add_header&lt;/span> &lt;span style="color:#e6db74">X-Content-Type-Options&lt;/span> &lt;span style="color:#e6db74">nosniff&lt;/span>;
+&lt;span style="color:#f92672">ssl_dhparam&lt;/span> &lt;span style="color:#e6db74">/etc/ssl/certs/dhparam.pem&lt;/span>;
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>重新加载 Nginx 配置, 此时打开浏览器, 就可以看到地址栏的小绿锁了.&lt;/p>
+&lt;h1 id="参考">参考&lt;/h1>
+&lt;ul>
+&lt;li>&lt;a href="https://certbot.eff.org">https://certbot.eff.org&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-16-04">How To Secure Nginx with Let&amp;rsquo;s Encrypt on Ubuntu 16.04&lt;/a>&lt;/li>
+&lt;/ul></description></item></channel></rss>

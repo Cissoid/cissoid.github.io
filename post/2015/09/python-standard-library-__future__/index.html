@@ -1,0 +1,134 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=theme-color content="#F5F7F9"><title>Python 标准库笔记 —— __future__ | B-log</title><link rel=stylesheet href=/css/minimalism.css><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-67524885-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body><header><div class=container><h1><a href=/>B-log</a></h1><nav><ul><li>&nbsp;|&nbsp;</li><li><a href=/post/>Post</a></li><li>&nbsp;|&nbsp;</li><li><a href=/about/>About</a></li><li>&nbsp;|&nbsp;</li></ul></nav></div><hr></header><main><article class=post><header><h1>Python 标准库笔记 —— __future__</h1><ul class=description><li><time>2015-09-11</time></li><li>&nbsp;|</li><li>&nbsp;#Python</li></ul></header><section class=license><p><a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/><img alt="Creative Commons License" src=https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png></a><br>This work is licensed under a <a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/>Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.</p></section><section class=post><p>__future__ 模块可以让一些老版本的 Python 使用新版本中的一些语法特性.
+例如在 2.5 版本中是不支持 with&mldr;as&mldr; 这样的语法进行上下文管理的,
+但是如果在代码中加入 <code>from __future__ import with_statement</code>, 就可以让 2.5
+版本的 Python 也支持这个特性.</p><p>打开 __future__.py 文件, 可以看到其中支持 7 种这样的关键字特性, 分别是
+nested_scopes, generators, division, absolute_import, with_statement,
+print_function, unicode_literals.</p><h1 id=1-nested_scopes>1. nested_scopes</h1><p>从 PEP 227 的解释来看, nested_scopes 特性允许从代码外层的命名空间中引用变量.
+举例子而言, 有下面这段代码:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Python data-lang=Python><span style=color:#75715e># from __future__ import nested_scopes</span>
+
+<span style=color:#66d9ef>def</span> <span style=color:#a6e22e>main</span>():
+    a <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>
+    <span style=color:#66d9ef>print</span> <span style=color:#e6db74>&#39;outer</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>globals: </span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>locals: </span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>a=</span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#39;</span> <span style=color:#f92672>%</span> (globals(), locals(), a)
+    func <span style=color:#f92672>=</span> <span style=color:#66d9ef>lambda</span>: <span style=color:#e6db74>&#39;inner</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>globals: </span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>locals: </span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>a=</span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#39;</span> <span style=color:#f92672>%</span> (
+        globals(), locals(), a)
+    <span style=color:#66d9ef>print</span> func()
+
+<span style=color:#66d9ef>if</span> __name__ <span style=color:#f92672>==</span> <span style=color:#e6db74>&#39;__main__&#39;</span>:
+    main()
+</code></pre></div><p>使用 2.1 版本的 Python 运行, 会返回</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>test_nested_scopes.py:3: SyntaxWarning: local name &#39;a&#39; in &#39;main&#39; shadows use of &#39;a&#39; as global in nested scope &#39;lambda&#39;
+  def main():
+outer
+globals: {&#39;__doc__&#39;: None, &#39;main&#39;: &lt;function main at 0271351C&gt;, &#39;__name__&#39;: &#39;__main__&#39;, &#39;__builtins__&#39;: &lt;module &#39;__builtin__&#39; (built-in)&gt;}
+locals: {}
+a=1
+
+Traceback (most recent call last):
+  File &#34;test_nested_scopes.py&#34;, line 11, in ?
+    main()
+  File &#34;test_nested_scopes.py&#34;, line 8, in main
+    print func()
+  File &#34;test_nested_scopes.py&#34;, line 6, in &lt;lambda&gt;
+    func = lambda: &#39;inner\nglobals: %s\nlocals: %s\na=%s\n&#39; % (
+NameError: global name &#39;a&#39; is not defined
+</code></pre></div><p>执行时首先会报一个 SyntaxWarning, 并且在执行到 lambda 函数时, 会因为找不到变量 a
+而抛出 NameError.</p><p>而把第一行的注释取消掉后, 再次执行, 会返回</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>outer
+globals: {&#39;nested_scopes&#39;: Feature((2, 1, 0, &#39;beta&#39;, 1), (2, 2, 0, &#39;final&#39;, 0)), &#39;__doc__&#39;: None, &#39;main&#39;: &lt;function main at 02693F5C&gt;, &#39;__name__&#39;: &#39;__main__&#39;, &#39;__builtins__&#39;: &lt;module &#39;__builtin__&#39; (built-in)&gt;}
+locals: {&#39;a&#39;: 1}
+a=1
+
+inner
+globals: {&#39;nested_scopes&#39;: Feature((2, 1, 0, &#39;beta&#39;, 1), (2, 2, 0, &#39;final&#39;, 0)), &#39;__doc__&#39;: None, &#39;main&#39;: &lt;function main at 02693F5C&gt;, &#39;__name__&#39;: &#39;__main__&#39;, &#39;__builtins__&#39;: &lt;module &#39;__builtin__&#39; (built-in)&gt;}
+locals: {}
+a=1
+</code></pre></div><p>可以看到, 在 lambda 函数内部, globals 和 locals 中都找不到变量 a, 然而却能取到 a
+的值, 这就是因为从外层命名空间中引用了变量.</p><p>有一个奇怪的问题是, 在 Python 2.7 中执行同样的代码, 返回的内容为</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>outer
+globals: {&#39;nested_scopes&#39;: _Feature((2, 1, 0, &#39;beta&#39;, 1), (2, 2, 0, &#39;alpha&#39;, 0), 16), &#39;__builtins__&#39;: &lt;module &#39;__builtin__&#39; (built-in)&gt;, &#39;__file__&#39;: &#39;test_nested_scopes.py&#39;, &#39;__package__&#39;: None, &#39;__name__&#39;: &#39;__main__&#39;, &#39;main&#39;: &lt;function main at 0x02A60C70&gt;, &#39;__doc__&#39;: None}
+locals: {&#39;a&#39;: 1}
+a=1
+
+inner
+globals: {&#39;nested_scopes&#39;: _Feature((2, 1, 0, &#39;beta&#39;, 1), (2, 2, 0, &#39;alpha&#39;, 0), 16), &#39;__builtins__&#39;: &lt;module &#39;__builtin__&#39; (built-in)&gt;, &#39;__file__&#39;: &#39;test_nested_scopes.py&#39;, &#39;__package__&#39;: None, &#39;__name__&#39;: &#39;__main__&#39;, &#39;main&#39;: &lt;function main at 0x02A60C70&gt;, &#39;__doc__&#39;: None}
+locals: {&#39;a&#39;: 1}
+a=1
+</code></pre></div><p>可以看到 lambda 函数内的 locals 中是有 a 的, 这与 2.1 版本的表现并不一致,
+不清楚是在哪个版本开始做的改动. 不过毕竟 nested_scopes 是一个老的特性, 就不去深究了&mldr;</p><h1 id=2-generators>2. generators</h1><p>这个很简单, 加入了使用 yield 创建生成器的语法. 一个简单的例子:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Python data-lang=Python><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>fab</span>(n):
+    a <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>
+    b <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>
+    i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>
+    <span style=color:#66d9ef>while</span> i <span style=color:#f92672>&lt;</span> n:
+        <span style=color:#66d9ef>yield</span> b
+        a, b <span style=color:#f92672>=</span> b, a <span style=color:#f92672>+</span> b
+        i <span style=color:#f92672>+=</span> <span style=color:#ae81ff>1</span>
+
+
+<span style=color:#66d9ef>def</span> <span style=color:#a6e22e>main</span>():
+    result <span style=color:#f92672>=</span> fab(<span style=color:#ae81ff>5</span>)
+    <span style=color:#66d9ef>print</span> type(result)
+    <span style=color:#66d9ef>for</span> i <span style=color:#f92672>in</span> result:
+        <span style=color:#66d9ef>print</span> i
+
+<span style=color:#66d9ef>if</span> __name__ <span style=color:#f92672>==</span> <span style=color:#e6db74>&#39;__main__&#39;</span>:
+    main()
+</code></pre></div><p>运行它, 会输出</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>&lt;type &#39;generator&#39;&gt;
+1
+2
+3
+5
+8
+</code></pre></div><p>可以看到, 使用了 yield 关键词的函数, 会成为一个生成器.</p><h1 id=3-division>3. division</h1><p>这个也很简单. 2.x 版本的 Python 中, 除号 <code>/</code> 计算出的结果会是被除数和除数中精度更高的那一个类型,
+举一些例子:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>&gt;&gt;&gt; 10 / 3
+3
+&gt;&gt;&gt; 10L / 3
+3L
+&gt;&gt;&gt; 10.0 / 3
+3.3333333333333335
+</code></pre></div><p>因此, 除法结果的类型往往是难以预期的. 为了解决这个问题, 引入了新的计算符 <code>//</code>.
+使用 <code>/</code> 得出的结果始终是精确的, 而使用 <code>//</code> 得出的结果始终是向下取整的(但类型仍然是两个数中相对高的那一个),
+这样就很明确了. 还是举一些例子:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>&gt;&gt;&gt; from \_\_future\_\_ import division
+&gt;&gt;&gt; 10 / 3
+3.3333333333333335
+&gt;&gt;&gt; 10 // 3
+3
+&gt;&gt;&gt; 10L // 3
+3L
+&gt;&gt;&gt; 10.0 // 3
+3.0
+&gt;&gt;&gt; -10.0 // 3
+-4.0
+</code></pre></div><h1 id=4-absolute_import>4. absolute_import</h1><p>这个功能也很容易理解. 简单地说, 它是为了解决这样一个问题：当我们在代码中写下
+<code>import sys</code> 时, 怎样确定实际导入的是标准库中的 sys 模块, 或是当前文件夹下的
+sys.py 文件呢? 虽然几乎不会有人会起这样一个与标准库产生冲突的文件名,
+但也不得不承认, 这种 import 方式是会产生混淆的. absolute_import 绝对引用即是为了解决这个问题.
+还是用一个简单的例子试一下. 创建一个自定义的 package, 结构如下:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>package
+|-- __init__.py
+|-- main.py
+`-- sys.py
+</code></pre></div><p>其中两个 Python 文件的内容都很简单:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Python data-lang=Python><span style=color:#75715e># filename: sys.py</span>
+<span style=color:#66d9ef>print</span> <span style=color:#e6db74>&#39;Just imported a custom sys module.&#39;</span>
+
+<span style=color:#75715e># filename: main.py</span>
+<span style=color:#75715e># from \_\_future\_\_ import absolute_import</span>
+<span style=color:#f92672>import</span> sys
+</code></pre></div><p>然后运行 main.py:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Bash data-lang=Bash>$ python -m package.main
+Just imported custom sys module.
+</code></pre></div><p>可以看到实际 import 的是自定义的 sys.py. 而当取消 main.py 中第一行的注释后再次执行</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Bash data-lang=Bash>$ python -m package.main
+$
+</code></pre></div><p>并没有输出任何内容, 说明导入的是标准库中的 sys 模块.</p><p>那么, 使用 absolute_import 后, 怎么样在 main.py 中导入自定义的 sys.py 呢? 有两种方法:</p><ol><li><code>from . import sys</code>, 这种引用方法就是所谓的相对引用(relative import),
+在之前这种引用方法是被强烈不建议使用的, 但现在相对宽容一点, 因为相对引用还是有适合使用的场景,
+当 package 更名时, 不需要大量修改代码.</li><li><code>from package import sys</code>, 这种引用方法是新的绝对引用, 即 import 路径必须以
+sys.path 里的路径为根路径开始寻找.</li></ol><h1 id=5-with_statement>5. with_statement</h1><p>这个是让 Python 2.6 中正式加入的 with 语法在 2.5 中也能够使用. with
+语法的作用就是可以让对象自动完成一些初始化和清理工作. PEP 343 中已经有很直白的解释了.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Python data-lang=Python><span style=color:#66d9ef>with</span> EXPR <span style=color:#66d9ef>as</span> VAR:
+    BLOCK
+</code></pre></div><p>相当于</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Python data-lang=Python>VAR <span style=color:#f92672>=</span> EXPR
+VAR<span style=color:#f92672>.</span>__enter__()
+<span style=color:#66d9ef>try</span>:
+    BLOCK
+<span style=color:#66d9ef>finally</span>:
+    VAR<span style=color:#f92672>.</span>__exit__()
+</code></pre></div><p>也就是在 BLOCK 执行前后分别自动执行了 __enter__ 和 __exit__ 方法.</p><p>另外, 标准库中的 contextlib 模块提供了 contextmanager 装饰器, 能够让函数也支持 with 语法.</p><h1 id=6-print_function>6. print_function</h1><p>将 print 语句变为 Python 3 中的函数形式. 这个没有什么好说的, 不过将 print
+语句改为函数形式调用这一点很赞, 因为 print 语句的语法很奇怪, 有时候很容易出问题.
+比如需要在 print 后不换行, 就要在 print 语句后加一个逗号 (<code>print 'one',; print 'line'</code>);
+而使用 print 函数就可以很明确地使用 end 参数来设置 (<code>print('one', end=' '); print('line')</code>).</p><h1 id=7-unicode_literals>7. unicode_literals</h1><p>同样是为了与 Python 3 的语法兼容而产生. 在 Python 2 中, 字符串默认为 str,
+而在字符串前加 u 才会是 unicode; 而在 Python 3 中, 字符串默认为 unicode,
+而在字符串前加 b 才会是 str. unicode_literals 作用就是在 Python 2 中使用
+Python 3 的这种风格.</p><p>小小吐槽一句, 在 Python 2 中 <code>bytes is str</code> 返回的是 True! bytes 类型就是 str&mldr;</p></section></article></main><footer><hr><div class=container><div class=copyright>&copy;2017-2019 By cissoid.</div><div class=about>Built with <a href=https://gohugo.io>Hugo</a>, using theme <a href=https://github.com/cissoid/hugo-theme-minimalism>Minimalism</a>.</div></div></footer><div id=mask><div id=loading><div></div></div></div><script src=/js/minimalism.js></script></body></html>

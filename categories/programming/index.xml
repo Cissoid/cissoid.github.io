@@ -1,0 +1,664 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Programming on B-log</title><link>https://blog.wxh.me/categories/programming/</link><description>Recent content in Programming on B-log</description><generator>Hugo -- gohugo.io</generator><language>zh-cn</language><copyright>cissoid</copyright><lastBuildDate>Thu, 25 May 2017 15:40:11 +0800</lastBuildDate><atom:link href="https://blog.wxh.me/categories/programming/index.xml" rel="self" type="application/rss+xml"/><item><title>Let's Encrypt 证书在 Nginx 上的配置方法</title><link>https://blog.wxh.me/post/2017/05/letsencrypt-configuration-with-nginx/</link><pubDate>Thu, 25 May 2017 15:40:11 +0800</pubDate><guid>https://blog.wxh.me/post/2017/05/letsencrypt-configuration-with-nginx/</guid><description>&lt;p>在现如今运营商劫持已变得司空见惯, 同时网络安全形势愈发严峻的大环境下, 为自己的网站上全站
+HTTPS 是很有必要的. 然而个人小站用每年 N 美刀的付费证书似乎又没有必要, 如果有免费的解决方案当然最好不过.&lt;/p>
+&lt;p>曾经有一个还不错的免费证书提供商 &lt;a href="https://www.startssl.com">StartSSL&lt;/a>, 但后来,
+该公司被中国公司沃通 (WoSign) 收购, 并且做出了一些比较龌龊的事, 导致 Mozilla 和 Google
+都相继宣布不再信任该公司签发的证书, 所以现在还是放弃这家吧&amp;hellip;&lt;/p>
+&lt;p>Let&amp;rsquo;s Encrypt 算是最近几年比较流行的免费 HTTPS 证书方案了,
+但它的证书申请方式和其他一手交钱一手交货的证书分发机构不太一样, 因此在这里记录一下自己的申请过程.&lt;/p>
+&lt;h1 id="申请-lets-encrypt-证书">申请 Let&amp;rsquo;s Encrypt 证书&lt;/h1>
+&lt;h3 id="1-安装-certbot">1. 安装 certbot.&lt;/h3>
+&lt;p>&lt;a href="https://letsencrypt.org">Let&amp;rsquo;s Encrypt 官网&lt;/a> 推荐使用的 ACME 客户端是 &lt;a href="https://certbot.eff.org">Certbot&lt;/a>,
+其在各个平台下的安装方法可见官网. Ubuntu 下, 可以直接添加 ppa 源进行安装:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-shell" data-lang="shell">sudo apt-get install software-properties-common
+sudo add-apt-repository ppa:certbot/certbot
+sudo apt-get update
+sudo apt-get install certbot
+&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="2-配置-nginx-以便使用-webroot-方式申请证书">2. 配置 Nginx, 以便使用 webroot 方式申请证书.&lt;/h3>
+&lt;p>Certbot 提供了两种方式方式验证域名所有权:&lt;/p>
+&lt;ol>
+&lt;li>standalone 方式, 临时启动一个监听 443 端口的服务, Let&amp;rsquo;s Encrypt
+服务器会访问这个服务来确认你是域名的所有者.&lt;/li>
+&lt;li>webroot 方式, 访问 &lt;a href="http://yourdomain.com/.well-known/">http://yourdomain.com/.well-known/&lt;/a> 目录下的指定文件来验证身份.&lt;/li>
+&lt;/ol>
+&lt;p>standalone 的方式看似要简单一点, 但有一个问题, 如果使用这种方式验证域名的话,
+以后更新证书时, 也需要用同样的方式, 所以如果你有业务监听 443 端口的话,
+每次更新证书时都要停掉业务&amp;hellip;基本上, 还是不要用这种方式比较好.&lt;/p>
+&lt;p>为了使用 webroot 方式验证, 在 Nginx 中增加以下配置:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-nginx" data-lang="nginx"> &lt;span style="color:#66d9ef">location&lt;/span> ~ &lt;span style="color:#e6db74">/.well-known&lt;/span> {
+&lt;span style="color:#f92672">root&lt;/span> &lt;span style="color:#e6db74">/var/www/letsencrypt&lt;/span>;
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>这里我把 webroot 路径设为 /var/www/letsencrypt. 当然也可以任意设置, 只要确认有访问权限即可.&lt;/p>
+&lt;h3 id="3-申请证书">3. 申请证书&lt;/h3>
+&lt;p>申请证书的步骤 Certbot 官网上都有, 无非就是执行 &lt;code>sudo certbot certonly&lt;/code>
+后按照提示选择即可, 需要注意的是在输入 webroot 的地方需要填入上一步 Nginx
+中设置的 &lt;code>root&lt;/code> 路径.&lt;/p>
+&lt;p>申请成功后, 证书放在 &lt;code>/etc/letsencrypt/live/yourdomain.com/&lt;/code> 目录下, 包含 4 个文件:
+&lt;code>privkey.pem&lt;/code>, &lt;code>fullchain.pem&lt;/code>, &lt;code>chain.pem&lt;/code>, &lt;code>cert.pem&lt;/code>, 对每个文件的描述可见 README:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-text" data-lang="text">This directory contains your keys and certificates.
+`privkey.pem` : the private key for your certificate.
+`fullchain.pem`: the certificate file used in most server software.
+`chain.pem` : used for OCSP stapling in Nginx &amp;gt;=1.3.7.
+`cert.pem` : will break many server configurations, and should not be used
+without reading further documentation (see link below).
+We recommend not moving these files. For more information, see the Certbot
+User Guide at https://certbot.eff.org/docs/using.html#where-are-my-certificates.
+&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="4-配置自动更新">4. 配置自动更新&lt;/h3>
+&lt;p>由于 Let&amp;rsquo;s Encrypt 证书只有 3 个月的有效期, 到期前需要更新证书, 因此可以在 crontab
+中增加计划任务来自动做这件事. 执行 &lt;code>sudo crontab -e&lt;/code> 后输入:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-text" data-lang="text">0 2 * * * /usr/bin/certbot renew -q --renew-hook &amp;#34;/bin/systemctl reload nginx&amp;#34; &amp;gt;&amp;gt;/var/log/certbot.log 2&amp;gt;&amp;amp;1 &amp;amp;
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>这个计划任务的作用是每天 2 点调用 certbot 自动更新证书, 若更新成功, 就重新加载 Nginx 配置.&lt;/p>
+&lt;p>至此, 证书就申请好了.&lt;/p>
+&lt;h1 id="在-nginx-中配置并使用证书">在 Nginx 中配置并使用证书&lt;/h1>
+&lt;p>由于 Nginx 默认使用的是 1024 位 的 DHE 密钥, 为了进一步加强连接的安全性,
+我们可以生成更高强度的密钥. 执行 &lt;code>sudo openssl dhparam -out /etc/ssl/certs/dhparam.pem 4096&lt;/code>
+来生成 4096 位的密钥, 并保存到 &lt;code>/etc/ssl/certs&lt;/code> 目录下.&lt;/p>
+&lt;p>在 Nginx 中增加以下配置:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-nginx" data-lang="nginx">&lt;span style="color:#66d9ef">server&lt;/span> {
+&lt;span style="color:#f92672">ssl_certificate&lt;/span> &lt;span style="color:#e6db74">/etc/letsencrypt/live/yourdomain.com/fullchain.pem&lt;/span>;
+&lt;span style="color:#f92672">ssl_certificate_key&lt;/span> &lt;span style="color:#e6db74">/etc/letsencrypt/live/yourdomain.com/privkey.pem&lt;/span>;
+&lt;span style="color:#f92672">ssl_trusted_certificate&lt;/span> &lt;span style="color:#e6db74">/etc/letsencrypt/live/yourdomain.com/chain.pem&lt;/span>;
+&lt;span style="color:#f92672">ssl_protocols&lt;/span> &lt;span style="color:#e6db74">TLSv1&lt;/span> &lt;span style="color:#e6db74">TLSv1.1&lt;/span> &lt;span style="color:#e6db74">TLSv1.2&lt;/span>;
+&lt;span style="color:#f92672">ssl_prefer_server_ciphers&lt;/span> &lt;span style="color:#66d9ef">on&lt;/span>;
+&lt;span style="color:#f92672">ssl_ciphers&lt;/span> &lt;span style="color:#e6db74">&amp;#34;EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH&amp;#34;&lt;/span>;
+&lt;span style="color:#f92672">ssl_ecdh_curve&lt;/span> &lt;span style="color:#e6db74">secp384r1&lt;/span>;
+&lt;span style="color:#f92672">ssl_session_cache&lt;/span> &lt;span style="color:#e6db74">shared:SSL:10m&lt;/span>;
+&lt;span style="color:#f92672">ssl_session_tickets&lt;/span> &lt;span style="color:#66d9ef">off&lt;/span>;
+&lt;span style="color:#f92672">ssl_stapling&lt;/span> &lt;span style="color:#66d9ef">on&lt;/span>;
+&lt;span style="color:#f92672">ssl_stapling_verify&lt;/span> &lt;span style="color:#66d9ef">on&lt;/span>;
+&lt;span style="color:#f92672">add_header&lt;/span> &lt;span style="color:#e6db74">Strict-Transport-Security&lt;/span> &lt;span style="color:#e6db74">&amp;#34;max-age=63072000&lt;/span>; &lt;span style="color:#f92672">includeSubDomains&lt;/span>; &lt;span style="color:#f92672">preload&amp;#34;&lt;/span>;
+&lt;span style="color:#f92672">add_header&lt;/span> &lt;span style="color:#e6db74">X-Frame-Options&lt;/span> &lt;span style="color:#e6db74">DENY&lt;/span>;
+&lt;span style="color:#f92672">add_header&lt;/span> &lt;span style="color:#e6db74">X-Content-Type-Options&lt;/span> &lt;span style="color:#e6db74">nosniff&lt;/span>;
+&lt;span style="color:#f92672">ssl_dhparam&lt;/span> &lt;span style="color:#e6db74">/etc/ssl/certs/dhparam.pem&lt;/span>;
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>重新加载 Nginx 配置, 此时打开浏览器, 就可以看到地址栏的小绿锁了.&lt;/p>
+&lt;h1 id="参考">参考&lt;/h1>
+&lt;ul>
+&lt;li>&lt;a href="https://certbot.eff.org">https://certbot.eff.org&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-16-04">How To Secure Nginx with Let&amp;rsquo;s Encrypt on Ubuntu 16.04&lt;/a>&lt;/li>
+&lt;/ul></description></item><item><title>Redis 的一个文件描述符泄露 Bug</title><link>https://blog.wxh.me/post/2017/03/redis-file-descriptors-leak-bug/</link><pubDate>Tue, 28 Mar 2017 16:18:52 +0800</pubDate><guid>https://blog.wxh.me/post/2017/03/redis-file-descriptors-leak-bug/</guid><description>&lt;p>最近遇到了 Redis 中的一个 fd 泄露的 Bug, 经过一番排查后终于找到了原因,
+现将整个分析过程整理如下.&lt;/p>
+&lt;h1 id="1-查找问题">1. 查找问题&lt;/h1>
+&lt;p>一开始发现所有的服务都无法正常连接 Redis 后, 查看 Redis 日志, 发现大量如下错误:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-text" data-lang="text"># Error registering fd event for the new client: Numerical result out of range (fd=10247)
+# Error registering fd event for the new client: Numerical result out of range (fd=10247)
+# Error registering fd event for the new client: Numerical result out of range (fd=10247)
+...
+...
+...
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>从错误信息来看, 应当是耗尽了 fd 资源, 导致无法为新连接分配 fd. 可实际上为 Redis
+配置的 maxfd 有 10240, 而当时的连接数不过几百, 峰值连接数也不会超过 3000,
+正常情况下是不可能耗尽 fd 的.&lt;/p>
+&lt;p>继续查找最早出现问题的日志, 发现在 fd 异常的日志之前, 还有许多这样的错误日志:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-text" data-lang="text">* Starting automatic rewriting of AOF on 100% growth
+# Can&amp;#39;t rewrite append only file in background: fork: Cannot allocate memory
+* Starting automatic rewriting of AOF on 100% growth
+# Can&amp;#39;t rewrite append only file in background: fork: Cannot allocate memory
+* Starting automatic rewriting of AOF on 100% growth
+# Can&amp;#39;t rewrite append only file in background: fork: Cannot allocate memory
+...
+...
+...
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>这条错误日志的记录原因是因为重写 AOF 时内存不足导致失败, 很有可能 fd
+资源不足也是因为这个问题而并发产生的, 于是我在 Github 上查了一下 Issue,
+果然有人遇到了类似的情况:
+&lt;a href="https://github.com/antirez/redis/issues/2857">Error opening /setting AOF rewrite IPC pipes: Numerical result out of range&lt;/a>.&lt;/p>
+&lt;p>通过这个 issue, 很容易就找到了问题发生的原因: Redis 在 fork 子进程失败时没有关闭
+之前打开的管道, 导致 fd 泄露.&lt;/p>
+&lt;h1 id="2-分析源码">2. 分析源码&lt;/h1>
+&lt;p>Redis 在 3 种情况下会进行重写 aof 文件的操作:&lt;/p>
+&lt;ol>
+&lt;li>发送 &lt;code>BGREWRITEAOF&lt;/code> 命令主动发起重写.&lt;/li>
+&lt;li>将配置文件中的 &lt;code>appendonly&lt;/code> 选项由 no 改为 yes, 并且执行 &lt;code>CONFIG&lt;/code> 命令重载配置时.&lt;/li>
+&lt;li>当配置了 &lt;code>auto-aof-rewrite-percentage&lt;/code> 选项时, 会在满足条件时自动触发.&lt;/li>
+&lt;/ol>
+&lt;p>这里只分析第 3 种情况. 在
+&lt;a href="https://github.com/antirez/redis/blob/db8a945cbb861045428d39f960ace2bd99916a0b/src/server.c#L1092">serverCron&lt;/a>
+这个事件回调函数中, 可以看到如下代码:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-c" data-lang="c"> &lt;span style="color:#75715e">/* Trigger an AOF rewrite if needed */&lt;/span>
+&lt;span style="color:#66d9ef">if&lt;/span> (server.rdb_child_pid &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span> &lt;span style="color:#f92672">&amp;amp;&amp;amp;&lt;/span>
+server.aof_child_pid &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span> &lt;span style="color:#f92672">&amp;amp;&amp;amp;&lt;/span>
+server.aof_rewrite_perc &lt;span style="color:#f92672">&amp;amp;&amp;amp;&lt;/span>
+server.aof_current_size &lt;span style="color:#f92672">&amp;gt;&lt;/span> server.aof_rewrite_min_size)
+{
+&lt;span style="color:#66d9ef">long&lt;/span> &lt;span style="color:#66d9ef">long&lt;/span> base &lt;span style="color:#f92672">=&lt;/span> server.aof_rewrite_base_size &lt;span style="color:#f92672">?&lt;/span>
+server.aof_rewrite_base_size : &lt;span style="color:#ae81ff">1&lt;/span>;
+&lt;span style="color:#66d9ef">long&lt;/span> &lt;span style="color:#66d9ef">long&lt;/span> growth &lt;span style="color:#f92672">=&lt;/span> (server.aof_current_size&lt;span style="color:#f92672">*&lt;/span>&lt;span style="color:#ae81ff">100&lt;/span>&lt;span style="color:#f92672">/&lt;/span>base) &lt;span style="color:#f92672">-&lt;/span> &lt;span style="color:#ae81ff">100&lt;/span>;
+&lt;span style="color:#66d9ef">if&lt;/span> (growth &lt;span style="color:#f92672">&amp;gt;=&lt;/span> server.aof_rewrite_perc) {
+serverLog(LL_NOTICE,&lt;span style="color:#e6db74">&amp;#34;Starting automatic rewriting of AOF on %lld%% growth&amp;#34;&lt;/span>,growth);
+&lt;span style="color:#75715e">/* NOTE: 此处调用处理函数 */&lt;/span>
+rewriteAppendOnlyFileBackground();
+}
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>当 aof 文件增长率达到指定百分比时, 会自动调用
+&lt;a href="https://github.com/antirez/redis/blob/db8a945cbb861045428d39f960ace2bd99916a0b/src/aof.c#L1263">rewriteAppendOnlyFileBackground&lt;/a>
+函数. 这里需要注意两点:&lt;/p>
+&lt;ol>
+&lt;li>在该函数中调用 &lt;code>aofCreatePipes&lt;/code> 函数创建了 3 个管道用来与子进程通信.&lt;/li>
+&lt;li>子进程创建成功后, 将其 pid 存入了 &lt;code>server.aof_child_pid&lt;/code> 中.&lt;/li>
+&lt;/ol>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-c" data-lang="c">&lt;span style="color:#66d9ef">int&lt;/span> &lt;span style="color:#a6e22e">rewriteAppendOnlyFileBackground&lt;/span>(&lt;span style="color:#66d9ef">void&lt;/span>) {
+pid_t childpid;
+&lt;span style="color:#66d9ef">long&lt;/span> &lt;span style="color:#66d9ef">long&lt;/span> start;
+&lt;span style="color:#66d9ef">if&lt;/span> (server.aof_child_pid &lt;span style="color:#f92672">!=&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span> &lt;span style="color:#f92672">||&lt;/span> server.rdb_child_pid &lt;span style="color:#f92672">!=&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span>) &lt;span style="color:#66d9ef">return&lt;/span> C_ERR;
+&lt;span style="color:#75715e">/* NOTE: 调用 aofCreatePipes() 创建了 3 个管道. */&lt;/span>
+&lt;span style="color:#66d9ef">if&lt;/span> (aofCreatePipes() &lt;span style="color:#f92672">!=&lt;/span> C_OK) &lt;span style="color:#66d9ef">return&lt;/span> C_ERR;
+start &lt;span style="color:#f92672">=&lt;/span> ustime();
+&lt;span style="color:#66d9ef">if&lt;/span> ((childpid &lt;span style="color:#f92672">=&lt;/span> fork()) &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>) {
+&lt;span style="color:#75715e">/* hide */&lt;/span>
+} &lt;span style="color:#66d9ef">else&lt;/span> {
+&lt;span style="color:#75715e">/* Parent */&lt;/span>
+server.stat_fork_time &lt;span style="color:#f92672">=&lt;/span> ustime()&lt;span style="color:#f92672">-&lt;/span>start;
+server.stat_fork_rate &lt;span style="color:#f92672">=&lt;/span> (&lt;span style="color:#66d9ef">double&lt;/span>) zmalloc_used_memory() &lt;span style="color:#f92672">*&lt;/span> &lt;span style="color:#ae81ff">1000000&lt;/span> &lt;span style="color:#f92672">/&lt;/span> server.stat_fork_time &lt;span style="color:#f92672">/&lt;/span> (&lt;span style="color:#ae81ff">1024&lt;/span>&lt;span style="color:#f92672">*&lt;/span>&lt;span style="color:#ae81ff">1024&lt;/span>&lt;span style="color:#f92672">*&lt;/span>&lt;span style="color:#ae81ff">1024&lt;/span>); &lt;span style="color:#75715e">/* GB per second. */&lt;/span>
+latencyAddSampleIfNeeded(&lt;span style="color:#e6db74">&amp;#34;fork&amp;#34;&lt;/span>,server.stat_fork_time&lt;span style="color:#f92672">/&lt;/span>&lt;span style="color:#ae81ff">1000&lt;/span>);
+&lt;span style="color:#75715e">/* NOTE: fork 失败直接退出. */&lt;/span>
+&lt;span style="color:#66d9ef">if&lt;/span> (childpid &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span>) {
+serverLog(LL_WARNING,
+&lt;span style="color:#e6db74">&amp;#34;Can&amp;#39;t rewrite append only file in background: fork: %s&amp;#34;&lt;/span>,
+strerror(errno));
+&lt;span style="color:#66d9ef">return&lt;/span> C_ERR;
+}
+serverLog(LL_NOTICE,
+&lt;span style="color:#e6db74">&amp;#34;Background append only file rewriting started by pid %d&amp;#34;&lt;/span>,childpid);
+server.aof_rewrite_scheduled &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+server.aof_rewrite_time_start &lt;span style="color:#f92672">=&lt;/span> time(NULL);
+&lt;span style="color:#75715e">/* NOTE: 保存 pid. */&lt;/span>
+server.aof_child_pid &lt;span style="color:#f92672">=&lt;/span> childpid;
+updateDictResizePolicy();
+&lt;span style="color:#75715e">/* We set appendseldb to -1 in order to force the next call to the
+&lt;/span>&lt;span style="color:#75715e"> * feedAppendOnlyFile() to issue a SELECT command, so the differences
+&lt;/span>&lt;span style="color:#75715e"> * accumulated by the parent into server.aof_rewrite_buf will start
+&lt;/span>&lt;span style="color:#75715e"> * with a SELECT statement and it will be safe to merge. */&lt;/span>
+server.aof_selected_db &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span>;
+replicationScriptCacheFlush();
+&lt;span style="color:#66d9ef">return&lt;/span> C_OK;
+}
+&lt;span style="color:#66d9ef">return&lt;/span> C_OK; &lt;span style="color:#75715e">/* unreached */&lt;/span>
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>而对于这 3 个管道的回收工作, 是在
+&lt;a href="https://github.com/antirez/redis/blob/db8a945cbb861045428d39f960ace2bd99916a0b/src/aof.c#L1358">backgroundRewriteDoneHandler&lt;/a>
+中进行的, 这个函数还是在 &lt;code>serverCron&lt;/code> 函数中被调用:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-c" data-lang="c"> &lt;span style="color:#66d9ef">if&lt;/span> ((pid &lt;span style="color:#f92672">=&lt;/span> wait3(&lt;span style="color:#f92672">&amp;amp;&lt;/span>statloc,WNOHANG,NULL)) &lt;span style="color:#f92672">!=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>) {
+&lt;span style="color:#66d9ef">int&lt;/span> exitcode &lt;span style="color:#f92672">=&lt;/span> WEXITSTATUS(statloc);
+&lt;span style="color:#66d9ef">int&lt;/span> bysignal &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+&lt;span style="color:#66d9ef">if&lt;/span> (WIFSIGNALED(statloc)) bysignal &lt;span style="color:#f92672">=&lt;/span> WTERMSIG(statloc);
+&lt;span style="color:#66d9ef">if&lt;/span> (pid &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span>) {
+serverLog(LL_WARNING,&lt;span style="color:#e6db74">&amp;#34;wait3() returned an error: %s. &amp;#34;&lt;/span>
+&lt;span style="color:#e6db74">&amp;#34;rdb_child_pid = %d, aof_child_pid = %d&amp;#34;&lt;/span>,
+strerror(errno),
+(&lt;span style="color:#66d9ef">int&lt;/span>) server.rdb_child_pid,
+(&lt;span style="color:#66d9ef">int&lt;/span>) server.aof_child_pid);
+} &lt;span style="color:#66d9ef">else&lt;/span> &lt;span style="color:#66d9ef">if&lt;/span> (pid &lt;span style="color:#f92672">==&lt;/span> server.rdb_child_pid) {
+backgroundSaveDoneHandler(exitcode,bysignal);
+} &lt;span style="color:#66d9ef">else&lt;/span> &lt;span style="color:#66d9ef">if&lt;/span> (pid &lt;span style="color:#f92672">==&lt;/span> server.aof_child_pid) {
+&lt;span style="color:#75715e">/* NOTE: 这里调用清理函数. */&lt;/span>
+backgroundRewriteDoneHandler(exitcode,bysignal);
+} &lt;span style="color:#66d9ef">else&lt;/span> {
+&lt;span style="color:#66d9ef">if&lt;/span> (&lt;span style="color:#f92672">!&lt;/span>ldbRemoveChild(pid)) {
+serverLog(LL_WARNING,
+&lt;span style="color:#e6db74">&amp;#34;Warning, detected child with unmatched pid: %ld&amp;#34;&lt;/span>,
+(&lt;span style="color:#66d9ef">long&lt;/span>)pid);
+}
+}
+updateDictResizePolicy();
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>注意到执行 &lt;code>backgroundRewriteDoneHandler&lt;/code> 函数的条件是 &lt;code>pid == server.aof_child_pid&lt;/code>,
+而如果 fork 子进程失败 (如我们遇到的内存不足这种情况) 时, 之前创建的管道就不会被
+关闭了.&lt;/p>
+&lt;p>由于 &lt;code>serverCron&lt;/code> 函数默认配置下每秒会执行 10 次, 在出问题的情况下每次都会触发重
+写 aof 的机制, 每次都会泄露 3 个管道, 即 6 个 fd. 以这样的速度, 即使配置了 10240
+个 fd, 也只需要不到 3 分钟就能耗尽&amp;hellip;&lt;/p>
+&lt;p>这个问题已经在 2 月 20 日修复并合并到 3.2 分支的代码中, 但还没有发布新版本,
+也就是说在截止目前最新的 3.2.8 版本 Redis 中, 这个问题是仍未被修复的.&lt;/p></description></item><item><title>Minimalism -- 极简 Hugo Theme</title><link>https://blog.wxh.me/post/2017/01/hugo-theme-minimalism/</link><pubDate>Mon, 30 Jan 2017 21:55:23 +0800</pubDate><guid>https://blog.wxh.me/post/2017/01/hugo-theme-minimalism/</guid><description>&lt;p>最近把静态 Blog 生成工具由之前的 &lt;a href="https://hexo.io">Hexo&lt;/a> 切换到了 &lt;a href="https://gohugo.io">Hugo&lt;/a>,
+没有特别的原因, 只是因为相对于 nodejs, 更熟悉且更喜欢 golang 一些&amp;hellip;&lt;/p>
+&lt;p>切换过来的同时, 由于没有找到符合自己喜好的主题, 就尝试着自己摸索写了一个:
+&lt;a href="https://github.com/cissoid/hugo-theme-minimalism">Minimalism&lt;/a>, 使用 flexbox
+来解决排版及响应式的问题, 算是我这个前端苦手学习前端开发的第一步.&lt;/p>
+&lt;h1 id="文本">文本&lt;/h1>
+&lt;p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque venenatis eros ac varius blandit. Nunc pharetra tellus sed tortor imperdiet, pharetra feugiat felis finibus. Cras sit amet elit in nisi euismod congue. Nullam at quam sed sem semper pellentesque. Donec quis purus eu augue ornare venenatis. Ut sed eros nibh. Nullam mi elit, pharetra vel mi mollis, condimentum euismod urna. Pellentesque lorem felis, dapibus a tincidunt eget, rhoncus et diam. In ut metus in orci rhoncus efficitur nec venenatis ipsum.&lt;/p>
+&lt;p>&lt;em>Pellentesque eu risus et turpis dapibus congue et interdum metus. Nulla placerat, ante sit amet suscipit fermentum, justo urna tincidunt turpis, ac dignissim eros felis ut nisl. Integer metus metus, consectetur a justo dictum, finibus commodo diam. Nunc maximus nec lectus in semper. Donec libero sapien, convallis eu venenatis ac, vehicula eu justo. Curabitur velit risus, condimentum vel quam ut, pulvinar aliquet purus. Duis consequat massa sit amet dolor suscipit elementum id id tortor. Pellentesque venenatis convallis ipsum eu accumsan. Maecenas a dolor sem.&lt;/em>&lt;/p>
+&lt;p>&lt;strong>Nam turpis sem, facilisis eu rhoncus nec, mattis vel nunc. Nulla volutpat mauris vitae ipsum accumsan, quis scelerisque arcu volutpat. Suspendisse a ipsum non urna tempus volutpat. Proin interdum pretium mauris sit amet porta. Aliquam erat volutpat. Proin vel neque sem. Praesent tristique sit amet neque ac hendrerit. Sed porttitor, massa ac ultrices efficitur, dui metus consequat dolor, vitae consectetur massa leo eget enim. Nunc eu faucibus ipsum.&lt;/strong>&lt;/p>
+&lt;blockquote>
+&lt;p>Sed ut bibendum ipsum, non interdum erat. Fusce in porttitor velit. Nullam vitae elementum felis. Sed nec ultrices est. Nulla facilisis mattis nunc. Quisque leo nisi, pulvinar eget dignissim sit amet, porta vel ante. Phasellus pellentesque ac sem vitae pharetra. Phasellus efficitur sem eu felis euismod commodo eget et risus. Quisque sit amet tincidunt nibh. Nullam fermentum, odio vel venenatis egestas, risus tellus fermentum purus, eu accumsan massa velit quis est. Vestibulum sit amet sapien orci.&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="图片">图片&lt;/h1>
+&lt;p>&lt;img src="https://images.unsplash.com/photo-1488764619428-8fc2aaf23eba?auto=format&amp;amp;w=1440&amp;amp;h=1080" alt="">&lt;/p>
+&lt;h1 id="列表">列表&lt;/h1>
+&lt;ol>
+&lt;li>Lorem ipsum dolor sit amet, consectetur adipiscing elit.&lt;/li>
+&lt;li>Mauris at libero convallis, tempus risus eu, malesuada urna.&lt;/li>
+&lt;li>In eu est ullamcorper, egestas metus sed, convallis neque.&lt;/li>
+&lt;li>Sed a dolor semper orci rutrum blandit ac vel nisi.&lt;/li>
+&lt;li>Praesent eget felis sit amet quam fringilla sodales ac a purus.&lt;/li>
+&lt;/ol>
+&lt;ul>
+&lt;li>Quisque fringilla nisi sed ipsum porta facilisis.&lt;/li>
+&lt;li>Vestibulum sollicitudin purus at tempor aliquet.&lt;/li>
+&lt;li>Morbi a nisi vel sapien gravida facilisis.&lt;/li>
+&lt;li>Donec posuere sem ut enim pretium luctus.&lt;/li>
+&lt;li>Donec ac mi fermentum, hendrerit libero et, egestas lacus.&lt;/li>
+&lt;/ul>
+&lt;h1 id="checklist">Checklist&lt;/h1>
+&lt;ul>
+&lt;li>&lt;input checked="" disabled="" type="checkbox"> &lt;a href="http://www.baidu.com">links&lt;/a>, &lt;strong>formatting&lt;/strong>, and &lt;!-- raw HTML omitted -->tags&lt;!-- raw HTML omitted --> supported&lt;/li>
+&lt;li>&lt;input checked="" disabled="" type="checkbox"> list syntax required (any unordered or ordered list supported)&lt;/li>
+&lt;li>&lt;input checked="" disabled="" type="checkbox"> this is a complete item&lt;/li>
+&lt;li>&lt;input disabled="" type="checkbox"> this is an incomplete item&lt;/li>
+&lt;/ul>
+&lt;h1 id="代码">代码&lt;/h1>
+&lt;p>I think you should use an &lt;code>&amp;lt;addr&amp;gt;&lt;/code> element here instead.&lt;/p>
+&lt;p>Press &lt;!-- raw HTML omitted -->Ctrl&lt;!-- raw HTML omitted --> + &lt;!-- raw HTML omitted -->C&lt;!-- raw HTML omitted -->.&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-python" data-lang="python">&lt;span style="color:#75715e">#!/usr/bin/env python&lt;/span>
+&lt;span style="color:#75715e"># coding: utf-8&lt;/span>
+&lt;span style="color:#66d9ef">def&lt;/span> &lt;span style="color:#a6e22e">main&lt;/span>():
+&lt;span style="color:#66d9ef">print&lt;/span>(&lt;span style="color:#e6db74">&amp;#39;Hello World&amp;#39;&lt;/span>)
+&lt;span style="color:#66d9ef">if&lt;/span> __name__ &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#e6db74">&amp;#39;__main__&amp;#39;&lt;/span>:
+main()
+&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="表格">表格&lt;/h1>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th align="center">First Header&lt;/th>
+&lt;th align="center">Second Header&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td align="center">Content from cell 1&lt;/td>
+&lt;td align="center">Content from cell 2&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">Content in the first column&lt;/td>
+&lt;td align="center">Content in the second column&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table></description></item><item><title>一个简单的 Vim 文件模板插件</title><link>https://blog.wxh.me/post/2016/05/a-simple-vim-template-plugin/</link><pubDate>Wed, 11 May 2016 15:58:18 +0800</pubDate><guid>https://blog.wxh.me/post/2016/05/a-simple-vim-template-plugin/</guid><description>&lt;p>最近尝试了一下在 Vim 中实现一个简单的文件模板功能, 总共只写了 3 个函数就完成了自己的需求,
+再次体现出 Vim 强大的可定制性.&lt;/p>
+&lt;h1 id="1-创建新文件时自动填入模板">1. 创建新文件时自动填入模板.&lt;/h1>
+&lt;h2 id="11-编写一个简单的模板-以-c-语言的模板为例">1.1. 编写一个简单的模板, 以 C 语言的模板为例.&lt;/h2>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-C" data-lang="C">&lt;span style="color:#75715e">/*
+&lt;/span>&lt;span style="color:#75715e"> * File Name: [:VIM_EVAL:]expand(&amp;#39;%:t&amp;#39;)[:END_EVAL:]
+&lt;/span>&lt;span style="color:#75715e"> * Author:
+&lt;/span>&lt;span style="color:#75715e"> * Created At: [:VIM_EVAL:]strftime(&amp;#39;%Y-%m-%d %H:%M:%S&amp;#39;)[:END_EVAL:]
+&lt;/span>&lt;span style="color:#75715e"> * Last Modified: [:VIM_EVAL:]strftime(&amp;#39;%Y-%m-%d %H:%M:%S&amp;#39;)[:END_EVAL:]
+&lt;/span>&lt;span style="color:#75715e"> */&lt;/span>
+&lt;span style="color:#75715e">#include&lt;/span> &lt;span style="color:#75715e">&amp;lt;stdio.h&amp;gt;&lt;/span>&lt;span style="color:#75715e">
+&lt;/span>&lt;span style="color:#75715e">&lt;/span>
+&lt;span style="color:#66d9ef">int&lt;/span> &lt;span style="color:#a6e22e">main&lt;/span>(&lt;span style="color:#66d9ef">int&lt;/span> argc, &lt;span style="color:#66d9ef">char&lt;/span> &lt;span style="color:#f92672">**&lt;/span>argv) {
+printf(&lt;span style="color:#e6db74">&amp;#34;Hello World&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">&amp;#34;&lt;/span>);
+&lt;span style="color:#66d9ef">return&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>其中使用 &lt;code>[:VIM_EVAL:][:END_EVAL:]&lt;/code> 来作为替换变量的标志. 中间的部分会使用 &lt;code>eval()&lt;/code> 执行.&lt;/p>
+&lt;h2 id="12-在-vimrc-中添加如下函数">1.2. 在 vimrc 中添加如下函数.&lt;/h2>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Vim" data-lang="Vim">&lt;span style="color:#66d9ef">function&lt;/span>! &lt;span style="color:#a6e22e">s&lt;/span>:&lt;span style="color:#a6e22e">AddFileTemplate&lt;/span>(&lt;span style="color:#a6e22e">filetype&lt;/span>)&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#66d9ef">let&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">template&lt;/span> = &lt;span style="color:#e6db74">&amp;#39;~/.vim/templates/&amp;#39;&lt;/span> . &lt;span style="color:#a6e22e">a&lt;/span>:&lt;span style="color:#a6e22e">filetype&lt;/span> . &lt;span style="color:#e6db74">&amp;#39;.template&amp;#39;&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#66d9ef">let&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">writecmd&lt;/span> = &lt;span style="color:#e6db74">&amp;#39;0read &amp;#39;&lt;/span> . &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">template&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#a6e22e">silent&lt;/span>! &lt;span style="color:#a6e22e">execute&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">writecmd&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#66d9ef">let&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">exec_line&lt;/span> = &lt;span style="color:#e6db74">&amp;#39;1,&amp;#39;&lt;/span> . &lt;span style="color:#a6e22e">min&lt;/span>([&lt;span style="color:#a6e22e">line&lt;/span>(&lt;span style="color:#e6db74">&amp;#39;$&amp;#39;&lt;/span>), &lt;span style="color:#ae81ff">10&lt;/span>])&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#66d9ef">let&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">eval_regex&lt;/span> = &lt;span style="color:#e6db74">&amp;#39;\[:VIM_EVAL:\](.+)\[:END_EVAL:\]&amp;#39;&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#66d9ef">let&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">eval_func&lt;/span> = &lt;span style="color:#e6db74">&amp;#39;\=eval(submatch(1))&amp;#39;&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#66d9ef">let&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">execcmd&lt;/span> = &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">exec_line&lt;/span> . &lt;span style="color:#e6db74">&amp;#39;s/\v\C&amp;#39;&lt;/span> . &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">eval_regex&lt;/span> . &lt;span style="color:#e6db74">&amp;#39;/&amp;#39;&lt;/span> . &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">eval_func&lt;/span> . &lt;span style="color:#e6db74">&amp;#39;/g&amp;#39;&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#a6e22e">silent&lt;/span>! &lt;span style="color:#a6e22e">execute&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">execcmd&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span>&lt;span style="color:#66d9ef">endfunction&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>这里假定模板文件是放置在 &lt;code>~/.vim/templates&lt;/code> 目录下.&lt;/p>
+&lt;h2 id="13-增加-autocmd-当新建文件时自动填入模板">1.3. 增加 autocmd, 当新建文件时自动填入模板.&lt;/h2>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Vim" data-lang="Vim">&lt;span style="color:#a6e22e">autocmd&lt;/span> &lt;span style="color:#a6e22e">BufNewFile&lt;/span> *.&lt;span style="color:#a6e22e">h&lt;/span>,*.&lt;span style="color:#a6e22e">c&lt;/span> &lt;span style="color:#a6e22e">call&lt;/span> &lt;span style="color:#a6e22e">s&lt;/span>:&lt;span style="color:#a6e22e">AddFileTemplate&lt;/span>(&lt;span style="color:#e6db74">&amp;#39;c&amp;#39;&lt;/span>)&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="2-保存文件时自动更新时间戳">2. 保存文件时自动更新时间戳.&lt;/h1>
+&lt;h2 id="21-在-vimrc-中添加如下函数">2.1. 在 vimrc 中添加如下函数.&lt;/h2>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Vim" data-lang="Vim">&lt;span style="color:#66d9ef">function&lt;/span>! &lt;span style="color:#a6e22e">s&lt;/span>:&lt;span style="color:#a6e22e">UpdateFileTemplate&lt;/span>()&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#66d9ef">let&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">exec_line&lt;/span> = &lt;span style="color:#e6db74">&amp;#39;1,&amp;#39;&lt;/span> . &lt;span style="color:#a6e22e">min&lt;/span>([&lt;span style="color:#a6e22e">line&lt;/span>(&lt;span style="color:#e6db74">&amp;#39;$&amp;#39;&lt;/span>), &lt;span style="color:#ae81ff">10&lt;/span>])&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#66d9ef">let&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">modify_regex&lt;/span> = &lt;span style="color:#e6db74">&amp;#39;(Last Modified: )@&amp;lt;=([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2})&amp;#39;&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#66d9ef">let&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">eval_func&lt;/span> = &lt;span style="color:#e6db74">&amp;#39;\=eval(&amp;#34;strftime(\&amp;#34;%Y-%m-%d %H:%M:%S\&amp;#34;)&amp;#34;)&amp;#39;&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#a6e22e">silent&lt;/span>! &lt;span style="color:#a6e22e">normal&lt;/span>! &lt;span style="color:#a6e22e">mm&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#a6e22e">silent&lt;/span>! &lt;span style="color:#a6e22e">execute&lt;/span> &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">exec_line&lt;/span> . &lt;span style="color:#e6db74">&amp;#39;s/\v\C&amp;#39;&lt;/span> . &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">modify_regex&lt;/span> . &lt;span style="color:#e6db74">&amp;#39;/&amp;#39;&lt;/span> . &lt;span style="color:#a6e22e">l&lt;/span>:&lt;span style="color:#a6e22e">eval_func&lt;/span> . &lt;span style="color:#e6db74">&amp;#39;/&amp;#39;&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#a6e22e">silent&lt;/span>! &lt;span style="color:#a6e22e">normal&lt;/span>! &amp;#39;&lt;span style="color:#a6e22e">m&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#a6e22e">silent&lt;/span>! &lt;span style="color:#a6e22e">execute&lt;/span> &lt;span style="color:#e6db74">&amp;#39;delmarks m&amp;#39;&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span> &lt;span style="color:#a6e22e">silent&lt;/span>! &lt;span style="color:#a6e22e">normal&lt;/span>! &lt;span style="color:#a6e22e">zz&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">&lt;/span>&lt;span style="color:#66d9ef">endfunction&lt;/span>&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="22-增加-autocmd">2.2. 增加 autocmd&lt;/h2>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Vim" data-lang="Vim">&lt;span style="color:#a6e22e">autocmd&lt;/span> &lt;span style="color:#a6e22e">BufWritePre&lt;/span> *.&lt;span style="color:#a6e22e">h&lt;/span>,*.&lt;span style="color:#a6e22e">c&lt;/span> &lt;span style="color:#a6e22e">call&lt;/span> &lt;span style="color:#a6e22e">s&lt;/span>:&lt;span style="color:#a6e22e">UpdateFileTemplate&lt;/span>()&lt;span style="color:#960050;background-color:#1e0010">
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div></description></item><item><title>Cygwin 环境下 SSH 的权限配置问题</title><link>https://blog.wxh.me/post/2016/01/cygwin-ssh-permission-configuration/</link><pubDate>Sun, 17 Jan 2016 17:04:31 +0800</pubDate><guid>https://blog.wxh.me/post/2016/01/cygwin-ssh-permission-configuration/</guid><description>&lt;p>Windows 和 *nix 的权限系统有很大的差别, 所以虽然 Cygwin 移植了 *nix
+系统中的一些程序到 Windows, 但实际使用过程中还是有一些坑需要注意,
+这里把自己遇到的问题和解决方法做一简单记录.&lt;/p>
+&lt;ol>
+&lt;li>刚安装好 Cygwin 的情况下, 输入 &lt;code>ssh -T git@github.com&lt;/code>, 会提示如下信息:&lt;/li>
+&lt;/ol>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">Could not create directory &amp;#39;/home/username/.ssh&amp;#39;.
+The authenticity of host &amp;#39;github.com (xxx.xxx.xxx.xxx)&amp;#39; can&amp;#39;t be established.
+RSA key fingerprint is xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.
+Are you sure you want to continue connecting (yes/no)? yes
+Failed to add the host to the list of known hosts (/home/username/.ssh/known_hosts).
+Permission denied (publickey).
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>看错误提示, 可以知道 ssh 找不到并且无法创建 /home/username/.ssh/ 文件夹,
+因此无法保存服务器公钥签名到 known_hosts 文件, 同时也无法读取 .ssh/config 配置文件.&lt;/p>
+&lt;p>出现这种情况的原因是因为 Cygwin 修改了 HOME 目录的路径. ssh 寻找的是 ~/.ssh/
+目录, 在 Linux 系统中, 对应的是 /home/username/.ssh/, 然而 Cygwin
+实际上并不会为用户创建这个目录, 因此它是不存在的.&lt;/p>
+&lt;p>解决方法: 将用户的 HOME 目录设置为 Windows 下的用户目录. C:\Users\ 目录在 Cygwin
+中对应 /cygdrive/c/Users, 执行 &lt;code>cygpath -H&lt;/code> 也可以确认这一点. 因此, 在 bash
+环境下执行 &lt;code>mkpasswd -l -p &amp;quot;$(cygpath -H)&amp;quot; &amp;gt; /etc/passwd&lt;/code> 即可.&lt;/p>
+&lt;ol start="2">
+&lt;li>在处理完上述操作后, ssh -T 提示 “Bad owner or permissions”&lt;/li>
+&lt;/ol>
+&lt;p>默认情况下创建的文件夹权限是 770, ssh 认为这样的权限太开放了, 会存在安全隐患.
+同时, 如果使用的 Windows 账户是 Administrator, 文件夹的所有者可能会是 Administrator
+和 Administrators 两种, 因此也需要作修改.&lt;/p>
+&lt;p>解决方法: 执行如下语句&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">chown -R username .ssh/
+chmod -R 600 .ssh/
+&lt;/code>&lt;/pre>&lt;/div>&lt;ol start="3">
+&lt;li>权限修改成功后, ssh -T 提示 “Permission denied (publickey).”&lt;/li>
+&lt;/ol>
+&lt;p>由于 Git 仓库只能使用私钥进行使用, 因此需要配置 RSA 私钥.&lt;/p>
+&lt;p>解决方法: 将自己 Github 公钥对应的私钥放到 .ssh/ 目录下, 修改文件名为 id_rsa,
+并且权限也要设为 600. 同时, 如果已经有另一个 id_rsa 并作他用的话, 也可以创建
+config 文件来指定 Github 使用的私钥. 创建 .ssh/config 文件并写入以下内容:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">Host github.com
+Hostname github.com
+User git
+IdentityFile ~/.ssh/key_name
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>然后现在再执行 &lt;code>ssh -T git@github.com&lt;/code>, 可以看到验证成功的消息了:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">Hi username! You&amp;#39;ve successfully authenticated, but GitHub does not provide shell access.
+&lt;/code>&lt;/pre>&lt;/div></description></item><item><title>Python 标准库笔记 —— __future__</title><link>https://blog.wxh.me/post/2015/09/python-standard-library-__future__/</link><pubDate>Fri, 11 Sep 2015 22:42:40 +0800</pubDate><guid>https://blog.wxh.me/post/2015/09/python-standard-library-__future__/</guid><description>&lt;p>__future__ 模块可以让一些老版本的 Python 使用新版本中的一些语法特性.
+例如在 2.5 版本中是不支持 with&amp;hellip;as&amp;hellip; 这样的语法进行上下文管理的,
+但是如果在代码中加入 &lt;code>from __future__ import with_statement&lt;/code>, 就可以让 2.5
+版本的 Python 也支持这个特性.&lt;/p>
+&lt;p>打开 __future__.py 文件, 可以看到其中支持 7 种这样的关键字特性, 分别是
+nested_scopes, generators, division, absolute_import, with_statement,
+print_function, unicode_literals.&lt;/p>
+&lt;h1 id="1-nested_scopes">1. nested_scopes&lt;/h1>
+&lt;p>从 PEP 227 的解释来看, nested_scopes 特性允许从代码外层的命名空间中引用变量.
+举例子而言, 有下面这段代码:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">&lt;span style="color:#75715e"># from __future__ import nested_scopes&lt;/span>
+&lt;span style="color:#66d9ef">def&lt;/span> &lt;span style="color:#a6e22e">main&lt;/span>():
+a &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>
+&lt;span style="color:#66d9ef">print&lt;/span> &lt;span style="color:#e6db74">&amp;#39;outer&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">globals: &lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">locals: &lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">a=&lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">&amp;#39;&lt;/span> &lt;span style="color:#f92672">%&lt;/span> (globals(), locals(), a)
+func &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#66d9ef">lambda&lt;/span>: &lt;span style="color:#e6db74">&amp;#39;inner&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">globals: &lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">locals: &lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">a=&lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">&amp;#39;&lt;/span> &lt;span style="color:#f92672">%&lt;/span> (
+globals(), locals(), a)
+&lt;span style="color:#66d9ef">print&lt;/span> func()
+&lt;span style="color:#66d9ef">if&lt;/span> __name__ &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#e6db74">&amp;#39;__main__&amp;#39;&lt;/span>:
+main()
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>使用 2.1 版本的 Python 运行, 会返回&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">test_nested_scopes.py:3: SyntaxWarning: local name &amp;#39;a&amp;#39; in &amp;#39;main&amp;#39; shadows use of &amp;#39;a&amp;#39; as global in nested scope &amp;#39;lambda&amp;#39;
+def main():
+outer
+globals: {&amp;#39;__doc__&amp;#39;: None, &amp;#39;main&amp;#39;: &amp;lt;function main at 0271351C&amp;gt;, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;}
+locals: {}
+a=1
+Traceback (most recent call last):
+File &amp;#34;test_nested_scopes.py&amp;#34;, line 11, in ?
+main()
+File &amp;#34;test_nested_scopes.py&amp;#34;, line 8, in main
+print func()
+File &amp;#34;test_nested_scopes.py&amp;#34;, line 6, in &amp;lt;lambda&amp;gt;
+func = lambda: &amp;#39;inner\nglobals: %s\nlocals: %s\na=%s\n&amp;#39; % (
+NameError: global name &amp;#39;a&amp;#39; is not defined
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>执行时首先会报一个 SyntaxWarning, 并且在执行到 lambda 函数时, 会因为找不到变量 a
+而抛出 NameError.&lt;/p>
+&lt;p>而把第一行的注释取消掉后, 再次执行, 会返回&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">outer
+globals: {&amp;#39;nested_scopes&amp;#39;: Feature((2, 1, 0, &amp;#39;beta&amp;#39;, 1), (2, 2, 0, &amp;#39;final&amp;#39;, 0)), &amp;#39;__doc__&amp;#39;: None, &amp;#39;main&amp;#39;: &amp;lt;function main at 02693F5C&amp;gt;, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;}
+locals: {&amp;#39;a&amp;#39;: 1}
+a=1
+inner
+globals: {&amp;#39;nested_scopes&amp;#39;: Feature((2, 1, 0, &amp;#39;beta&amp;#39;, 1), (2, 2, 0, &amp;#39;final&amp;#39;, 0)), &amp;#39;__doc__&amp;#39;: None, &amp;#39;main&amp;#39;: &amp;lt;function main at 02693F5C&amp;gt;, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;}
+locals: {}
+a=1
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到, 在 lambda 函数内部, globals 和 locals 中都找不到变量 a, 然而却能取到 a
+的值, 这就是因为从外层命名空间中引用了变量.&lt;/p>
+&lt;p>有一个奇怪的问题是, 在 Python 2.7 中执行同样的代码, 返回的内容为&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">outer
+globals: {&amp;#39;nested_scopes&amp;#39;: _Feature((2, 1, 0, &amp;#39;beta&amp;#39;, 1), (2, 2, 0, &amp;#39;alpha&amp;#39;, 0), 16), &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;, &amp;#39;__file__&amp;#39;: &amp;#39;test_nested_scopes.py&amp;#39;, &amp;#39;__package__&amp;#39;: None, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;main&amp;#39;: &amp;lt;function main at 0x02A60C70&amp;gt;, &amp;#39;__doc__&amp;#39;: None}
+locals: {&amp;#39;a&amp;#39;: 1}
+a=1
+inner
+globals: {&amp;#39;nested_scopes&amp;#39;: _Feature((2, 1, 0, &amp;#39;beta&amp;#39;, 1), (2, 2, 0, &amp;#39;alpha&amp;#39;, 0), 16), &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;, &amp;#39;__file__&amp;#39;: &amp;#39;test_nested_scopes.py&amp;#39;, &amp;#39;__package__&amp;#39;: None, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;main&amp;#39;: &amp;lt;function main at 0x02A60C70&amp;gt;, &amp;#39;__doc__&amp;#39;: None}
+locals: {&amp;#39;a&amp;#39;: 1}
+a=1
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到 lambda 函数内的 locals 中是有 a 的, 这与 2.1 版本的表现并不一致,
+不清楚是在哪个版本开始做的改动. 不过毕竟 nested_scopes 是一个老的特性, 就不去深究了&amp;hellip;&lt;/p>
+&lt;h1 id="2-generators">2. generators&lt;/h1>
+&lt;p>这个很简单, 加入了使用 yield 创建生成器的语法. 一个简单的例子:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">&lt;span style="color:#66d9ef">def&lt;/span> &lt;span style="color:#a6e22e">fab&lt;/span>(n):
+a &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>
+b &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>
+i &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>
+&lt;span style="color:#66d9ef">while&lt;/span> i &lt;span style="color:#f92672">&amp;lt;&lt;/span> n:
+&lt;span style="color:#66d9ef">yield&lt;/span> b
+a, b &lt;span style="color:#f92672">=&lt;/span> b, a &lt;span style="color:#f92672">+&lt;/span> b
+i &lt;span style="color:#f92672">+=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>
+&lt;span style="color:#66d9ef">def&lt;/span> &lt;span style="color:#a6e22e">main&lt;/span>():
+result &lt;span style="color:#f92672">=&lt;/span> fab(&lt;span style="color:#ae81ff">5&lt;/span>)
+&lt;span style="color:#66d9ef">print&lt;/span> type(result)
+&lt;span style="color:#66d9ef">for&lt;/span> i &lt;span style="color:#f92672">in&lt;/span> result:
+&lt;span style="color:#66d9ef">print&lt;/span> i
+&lt;span style="color:#66d9ef">if&lt;/span> __name__ &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#e6db74">&amp;#39;__main__&amp;#39;&lt;/span>:
+main()
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>运行它, 会输出&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">&amp;lt;type &amp;#39;generator&amp;#39;&amp;gt;
+1
+2
+3
+5
+8
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到, 使用了 yield 关键词的函数, 会成为一个生成器.&lt;/p>
+&lt;h1 id="3-division">3. division&lt;/h1>
+&lt;p>这个也很简单. 2.x 版本的 Python 中, 除号 &lt;code>/&lt;/code> 计算出的结果会是被除数和除数中精度更高的那一个类型,
+举一些例子:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">&amp;gt;&amp;gt;&amp;gt; 10 / 3
+3
+&amp;gt;&amp;gt;&amp;gt; 10L / 3
+3L
+&amp;gt;&amp;gt;&amp;gt; 10.0 / 3
+3.3333333333333335
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>因此, 除法结果的类型往往是难以预期的. 为了解决这个问题, 引入了新的计算符 &lt;code>//&lt;/code>.
+使用 &lt;code>/&lt;/code> 得出的结果始终是精确的, 而使用 &lt;code>//&lt;/code> 得出的结果始终是向下取整的(但类型仍然是两个数中相对高的那一个),
+这样就很明确了. 还是举一些例子:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">&amp;gt;&amp;gt;&amp;gt; from \_\_future\_\_ import division
+&amp;gt;&amp;gt;&amp;gt; 10 / 3
+3.3333333333333335
+&amp;gt;&amp;gt;&amp;gt; 10 // 3
+3
+&amp;gt;&amp;gt;&amp;gt; 10L // 3
+3L
+&amp;gt;&amp;gt;&amp;gt; 10.0 // 3
+3.0
+&amp;gt;&amp;gt;&amp;gt; -10.0 // 3
+-4.0
+&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="4-absolute_import">4. absolute_import&lt;/h1>
+&lt;p>这个功能也很容易理解. 简单地说, 它是为了解决这样一个问题：当我们在代码中写下
+&lt;code>import sys&lt;/code> 时, 怎样确定实际导入的是标准库中的 sys 模块, 或是当前文件夹下的
+sys.py 文件呢? 虽然几乎不会有人会起这样一个与标准库产生冲突的文件名,
+但也不得不承认, 这种 import 方式是会产生混淆的. absolute_import 绝对引用即是为了解决这个问题.
+还是用一个简单的例子试一下. 创建一个自定义的 package, 结构如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">package
+|-- __init__.py
+|-- main.py
+`-- sys.py
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>其中两个 Python 文件的内容都很简单:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">&lt;span style="color:#75715e"># filename: sys.py&lt;/span>
+&lt;span style="color:#66d9ef">print&lt;/span> &lt;span style="color:#e6db74">&amp;#39;Just imported a custom sys module.&amp;#39;&lt;/span>
+&lt;span style="color:#75715e"># filename: main.py&lt;/span>
+&lt;span style="color:#75715e"># from \_\_future\_\_ import absolute_import&lt;/span>
+&lt;span style="color:#f92672">import&lt;/span> sys
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>然后运行 main.py:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Bash" data-lang="Bash">$ python -m package.main
+Just imported custom sys module.
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到实际 import 的是自定义的 sys.py. 而当取消 main.py 中第一行的注释后再次执行&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Bash" data-lang="Bash">$ python -m package.main
+$
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>并没有输出任何内容, 说明导入的是标准库中的 sys 模块.&lt;/p>
+&lt;p>那么, 使用 absolute_import 后, 怎么样在 main.py 中导入自定义的 sys.py 呢? 有两种方法:&lt;/p>
+&lt;ol>
+&lt;li>&lt;code>from . import sys&lt;/code>, 这种引用方法就是所谓的相对引用(relative import),
+在之前这种引用方法是被强烈不建议使用的, 但现在相对宽容一点, 因为相对引用还是有适合使用的场景,
+当 package 更名时, 不需要大量修改代码.&lt;/li>
+&lt;li>&lt;code>from package import sys&lt;/code>, 这种引用方法是新的绝对引用, 即 import 路径必须以
+sys.path 里的路径为根路径开始寻找.&lt;/li>
+&lt;/ol>
+&lt;h1 id="5-with_statement">5. with_statement&lt;/h1>
+&lt;p>这个是让 Python 2.6 中正式加入的 with 语法在 2.5 中也能够使用. with
+语法的作用就是可以让对象自动完成一些初始化和清理工作. PEP 343 中已经有很直白的解释了.&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">&lt;span style="color:#66d9ef">with&lt;/span> EXPR &lt;span style="color:#66d9ef">as&lt;/span> VAR:
+BLOCK
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>相当于&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">VAR &lt;span style="color:#f92672">=&lt;/span> EXPR
+VAR&lt;span style="color:#f92672">.&lt;/span>__enter__()
+&lt;span style="color:#66d9ef">try&lt;/span>:
+BLOCK
+&lt;span style="color:#66d9ef">finally&lt;/span>:
+VAR&lt;span style="color:#f92672">.&lt;/span>__exit__()
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>也就是在 BLOCK 执行前后分别自动执行了 __enter__ 和 __exit__ 方法.&lt;/p>
+&lt;p>另外, 标准库中的 contextlib 模块提供了 contextmanager 装饰器, 能够让函数也支持 with 语法.&lt;/p>
+&lt;h1 id="6-print_function">6. print_function&lt;/h1>
+&lt;p>将 print 语句变为 Python 3 中的函数形式. 这个没有什么好说的, 不过将 print
+语句改为函数形式调用这一点很赞, 因为 print 语句的语法很奇怪, 有时候很容易出问题.
+比如需要在 print 后不换行, 就要在 print 语句后加一个逗号 (&lt;code>print 'one',; print 'line'&lt;/code>);
+而使用 print 函数就可以很明确地使用 end 参数来设置 (&lt;code>print('one', end=' '); print('line')&lt;/code>).&lt;/p>
+&lt;h1 id="7-unicode_literals">7. unicode_literals&lt;/h1>
+&lt;p>同样是为了与 Python 3 的语法兼容而产生. 在 Python 2 中, 字符串默认为 str,
+而在字符串前加 u 才会是 unicode; 而在 Python 3 中, 字符串默认为 unicode,
+而在字符串前加 b 才会是 str. unicode_literals 作用就是在 Python 2 中使用
+Python 3 的这种风格.&lt;/p>
+&lt;p>小小吐槽一句, 在 Python 2 中 &lt;code>bytes is str&lt;/code> 返回的是 True! bytes 类型就是 str&amp;hellip;&lt;/p></description></item><item><title>优化 Hexo 博客在国内的访问速度</title><link>https://blog.wxh.me/post/2015/09/optimize-hexo-blog-load-speed-in-china-mainland/</link><pubDate>Wed, 02 Sep 2015 14:57:00 +0800</pubDate><guid>https://blog.wxh.me/post/2015/09/optimize-hexo-blog-load-speed-in-china-mainland/</guid><description>&lt;p>使用 Hexo + Github Pages 可以很方便地搭建起免费的静态博客站点. 然而 Github
+在国内的访问速度往往不尽如人意, 因此可以在国内的 GitCafe 上部署一套镜像,
+让国内的 IP 访问到 GitCafe Pages, 这样就 OK 了.&lt;/p>
+&lt;p>大致的步骤如下:&lt;/p>
+&lt;ol>
+&lt;li>需要有一个自己的域名, 并且托管到 DNSPod 上.&lt;/li>
+&lt;li>需要已经搭建好 Github Pages 站点, 并且设置好 CNAME 文件, 指向自己的域名.&lt;/li>
+&lt;li>需要在 GitCafe 上建立一个支持 Pages 服务的 Repository, 因此 repo name
+必须和用户名一致. 自定义域名设置中, 同样指向自己的域名.&lt;/li>
+&lt;li>修改 Hexo 的 _config.yml, 增加 deploy 项, 使得部署时会同时部署到 Github 和
+GitCafe. 其中 GitCafe 的 branch 需要设置为 &lt;code>gitcafe-pages&lt;/code>.&lt;/li>
+&lt;li>修改完成后, 执行 &lt;code>hexo deploy&lt;/code>, 应该就可以看到同时部署到了 Github 和 GitCafe 了.
+此时通过 username.github.io 和 username.gitcafe.io 访问到的页面看起来应该是完全一样的.&lt;/li>
+&lt;li>在 DNSPod 中增加如下记录:
+&lt;ol>
+&lt;li>新建一条 CNAME 记录, 主机记录为 blog （或其他需要的）, 线路类型为默认,
+记录值为 Github Pages 的域名, 如 cissoid.github.io.&lt;/li>
+&lt;li>再建一条 CNAME 记录, 主机记录与上一条一致, 线路类型为国内, 记录值为 gitcafe.io.&lt;/li>
+&lt;/ol>
+&lt;/li>
+&lt;/ol>
+&lt;p>完成上述设置后, 测试一下.&lt;/p>
+&lt;p>在国内 dig blog.wxh.me, 可以看到&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">;; ANSWER SECTION:
+blog.wxh.me. 579 IN CNAME gitcafe.io.
+gitcafe.io. 382 IN A 103.56.54.5
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>而在海外的 VPS 上执行同样操作, 看到返回的内容是&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">;; ANSWER SECTION:
+blog.wxh.me. 599 IN CNAME cissoid.github.io.
+cissoid.github.io. 3599 IN CNAME github.map.fastly.net.
+github.map.fastly.net. 10 IN A 199.27.79.133
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>无疑, 配置成功.&lt;/p></description></item><item><title>Autotools 简单使用教程</title><link>https://blog.wxh.me/post/2014/07/autotools-simple-tutotial/</link><pubDate>Mon, 21 Jul 2014 19:20:07 +0800</pubDate><guid>https://blog.wxh.me/post/2014/07/autotools-simple-tutotial/</guid><description>&lt;p>最近在学习 Autotools 的使用, 所以在网上找了一圈相关教程. 虽说也可以看官方文档, 但是内容实在是太多了&amp;hellip;不适合初次学习用. 后来发现了一个非常不错的教程: &lt;a href="http://markuskimius.wikidot.com/programming:tut:autotools">Autotools Tutorial for Beginners&lt;/a>. 这个教程非常简明地介绍了整套工具的使用流程, 但是编写的时间比较久了, 我在学习过程中发现 Autotools 工具已经做了一些修改, 使得这个教程已经不再适用. 因此将自己的学习过程做一记录.&lt;/p>
+&lt;h2 id="0-autotools-工具简单介绍">0. Autotools 工具简单介绍&lt;/h2>
+&lt;ol>
+&lt;li>&lt;code>autoscan&lt;/code> 生成 configure.scan.&lt;/li>
+&lt;li>重命名 configure.scan 为 configure.ac, 并修改其中 AC_INIT MACRO 对应的参数.&lt;/li>
+&lt;li>增加 &lt;code>AM_INIT_AUTOMAKE&lt;/code> MACRO 及 &lt;code>AC_CONFIG_FILES([Makefile])&lt;/code> MACRO.&lt;/li>
+&lt;li>&lt;code>aclocal&lt;/code>&lt;/li>
+&lt;li>&lt;code>autoheader&lt;/code> 生成 &lt;code>config.h.in&lt;/code>.&lt;/li>
+&lt;li>编写 &lt;code>Makefile.am&lt;/code>, &lt;code>automake&lt;/code> 生成 &lt;code>Makefile.in&lt;/code> 及其他文件.&lt;/li>
+&lt;li>&lt;code>./configure&lt;/code> 测试有无问题.&lt;/li>
+&lt;/ol>
+&lt;h2 id="1-简单的-hello-world-项目">1. 简单的 Hello World 项目.&lt;/h2>
+&lt;p>创建一个目录, 命名为 helloworld, 以此作为项目的根目录. 初始化项目结构如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">helloworld/
+├── Makefile
+└── src
+└── main.c
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>其中 main.c 代码如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-c" data-lang="c">&lt;span style="color:#75715e">#include&lt;/span> &lt;span style="color:#75715e">&amp;lt;stdio.h&amp;gt;&lt;/span>&lt;span style="color:#75715e">
+&lt;/span>&lt;span style="color:#75715e">&lt;/span>
+&lt;span style="color:#66d9ef">int&lt;/span> &lt;span style="color:#a6e22e">main&lt;/span>(&lt;span style="color:#66d9ef">int&lt;/span> argc, &lt;span style="color:#66d9ef">char&lt;/span> &lt;span style="color:#f92672">**&lt;/span>argv) {
+printf(&lt;span style="color:#e6db74">&amp;#34;Hello World&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">&amp;#34;&lt;/span>);
+&lt;span style="color:#66d9ef">return&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Makefile 代码如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">main:
+cc -o main src/main.c
+clean:
+rm -f main
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>非常简单的项目, 执行 &lt;code>make&lt;/code> 就可以编译生成可执行文件 main, 执行 &lt;code>./main&lt;/code> 就会打印出 &amp;ldquo;Hello World&amp;rdquo;, 执行 &lt;code>make clean&lt;/code> 就会删除编译好的 main 文件.&lt;/p>
+&lt;h2 id="2-使用-autoconf-生成-configure-文件">2. 使用 autoconf 生成 configure 文件&lt;/h2>
+&lt;h3 id="21-生成-configureac">2.1 生成 configure.ac&lt;/h3>
+&lt;p>configure 文件需要 autoconf 命令解析 configure.ac 文件生成, 而 configure.ac 文件可以使用 autoscan 命令来自动生成. 执行 &lt;code>autoscan&lt;/code> 后, 项目结构如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">helloworld/
+├── Makefile
+├── autoscan.log
+├── configure.scan
+└── src
+└── main.c
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到 autoscan 生成了 autoscan.log, configure.scan 两个文件, 而 configure.scan 实际上就是我们需要的 configure.ac 文件, 其内容如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback"># -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+AC_PREREQ([2.69])
+AC_INIT([FULL-PACKAGE-NAME], [VERSION], [BUG-REPORT-ADDRESS])
+AC_CONFIG_SRCDIR([src/main.c])
+AC_CONFIG_HEADERS([config.h])
+# Checks for programs.
+AC_PROG_CC
+# Checks for libraries.
+# Checks for header files.
+# Checks for typedefs, structures, and compiler characteristics.
+# Checks for library functions.
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>执行 &lt;code>mv configure.scan configure.ac&lt;/code> 将其重命名.&lt;/p>
+&lt;h3 id="22-生成-configure-文件">2.2 生成 configure 文件&lt;/h3>
+&lt;p>执行 &lt;code>autoconf&lt;/code>, 查看项目结构:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">helloworld/
+├── Makefile
+├── autom4te.cache
+│   ├── output.0
+│   ├── requests
+│   └── traces.0
+├── autoscan.log
+├── configure
+├── configure.ac
+└── src
+└── main.c
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>configure 文件已经成功生成.&lt;/p>
+&lt;h2 id="3-使用-autoheader-生成-configh">3. 使用 autoheader 生成 config.h.&lt;/h2>
+&lt;p>现在执行之前生成的 configure 文件, 会报如下错误:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables...
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether we are using the GNU C compiler... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to accept ISO C89... none needed
+configure: creating ./config.status
+config.status: error: cannot find input file: `Makefile.in&amp;#39;
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>提示缺少 Makefile.in 文件. 实际上 Makefile.in 文件就是 Makefile 文件, configure 执行时会将 Makefile.in 拷贝到 Makefile. 这里我们先简单地用自己的 Makefile 替代. 执行 &lt;code>mv Makefile Makefile.in&lt;/code> 后, 再次执行 configure 文件. 这次的错误如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables...
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether we are using the GNU C compiler... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to accept ISO C89... none needed
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: error: cannot find input file: `config.h.in&amp;#39;
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>提示缺少 config.h.in, 这个文件可以通过执行 autoheader 来获得. 执行 autoheader 后, 项目结构如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">helloworld/
+├── Makefile
+├── Makefile.in
+├── autom4te.cache
+│   ├── output.0
+│   ├── requests
+│   └── traces.0
+├── autoscan.log
+├── config.h.in
+├── config.log
+├── config.status
+├── configure
+├── configure.ac
+└── src
+└── main.c
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>再次执行 &lt;code>./configure&lt;/code>.&lt;/p></description></item></channel></rss>

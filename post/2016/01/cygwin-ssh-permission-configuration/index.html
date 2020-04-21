@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=theme-color content="#F5F7F9"><title>Cygwin 环境下 SSH 的权限配置问题 | B-log</title><link rel=stylesheet href=/css/minimalism.css><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-67524885-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body><header><div class=container><h1><a href=/>B-log</a></h1><nav><ul><li>&nbsp;|&nbsp;</li><li><a href=/post/>Post</a></li><li>&nbsp;|&nbsp;</li><li><a href=/about/>About</a></li><li>&nbsp;|&nbsp;</li></ul></nav></div><hr></header><main><article class=post><header><h1>Cygwin 环境下 SSH 的权限配置问题</h1><ul class=description><li><time>2016-01-17</time></li><li>&nbsp;|</li><li>&nbsp;#Cygwin</li><li>&nbsp;#ssh</li><li>&nbsp;#git</li></ul></header><section class=license><p><a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/><img alt="Creative Commons License" src=https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png></a><br>This work is licensed under a <a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/>Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.</p></section><section class=post><p>Windows 和 *nix 的权限系统有很大的差别, 所以虽然 Cygwin 移植了 *nix
+系统中的一些程序到 Windows, 但实际使用过程中还是有一些坑需要注意,
+这里把自己遇到的问题和解决方法做一简单记录.</p><ol><li>刚安装好 Cygwin 的情况下, 输入 <code>ssh -T git@github.com</code>, 会提示如下信息:</li></ol><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>Could not create directory &#39;/home/username/.ssh&#39;.
+The authenticity of host &#39;github.com (xxx.xxx.xxx.xxx)&#39; can&#39;t be established.
+RSA key fingerprint is xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.
+Are you sure you want to continue connecting (yes/no)? yes
+Failed to add the host to the list of known hosts (/home/username/.ssh/known_hosts).
+Permission denied (publickey).
+</code></pre></div><p>看错误提示, 可以知道 ssh 找不到并且无法创建 /home/username/.ssh/ 文件夹,
+因此无法保存服务器公钥签名到 known_hosts 文件, 同时也无法读取 .ssh/config 配置文件.</p><p>出现这种情况的原因是因为 Cygwin 修改了 HOME 目录的路径. ssh 寻找的是 ~/.ssh/
+目录, 在 Linux 系统中, 对应的是 /home/username/.ssh/, 然而 Cygwin
+实际上并不会为用户创建这个目录, 因此它是不存在的.</p><p>解决方法: 将用户的 HOME 目录设置为 Windows 下的用户目录. C:\Users\ 目录在 Cygwin
+中对应 /cygdrive/c/Users, 执行 <code>cygpath -H</code> 也可以确认这一点. 因此, 在 bash
+环境下执行 <code>mkpasswd -l -p "$(cygpath -H)" > /etc/passwd</code> 即可.</p><ol start=2><li>在处理完上述操作后, ssh -T 提示 “Bad owner or permissions”</li></ol><p>默认情况下创建的文件夹权限是 770, ssh 认为这样的权限太开放了, 会存在安全隐患.
+同时, 如果使用的 Windows 账户是 Administrator, 文件夹的所有者可能会是 Administrator
+和 Administrators 两种, 因此也需要作修改.</p><p>解决方法: 执行如下语句</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>chown -R username .ssh/
+chmod -R 600 .ssh/
+</code></pre></div><ol start=3><li>权限修改成功后, ssh -T 提示 “Permission denied (publickey).”</li></ol><p>由于 Git 仓库只能使用私钥进行使用, 因此需要配置 RSA 私钥.</p><p>解决方法: 将自己 Github 公钥对应的私钥放到 .ssh/ 目录下, 修改文件名为 id_rsa,
+并且权限也要设为 600. 同时, 如果已经有另一个 id_rsa 并作他用的话, 也可以创建
+config 文件来指定 Github 使用的私钥. 创建 .ssh/config 文件并写入以下内容:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>Host github.com
+Hostname github.com
+User git
+IdentityFile ~/.ssh/key_name
+</code></pre></div><p>然后现在再执行 <code>ssh -T git@github.com</code>, 可以看到验证成功的消息了:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Text data-lang=Text>Hi username! You&#39;ve successfully authenticated, but GitHub does not provide shell access.
+</code></pre></div></section></article></main><footer><hr><div class=container><div class=copyright>&copy;2017-2019 By cissoid.</div><div class=about>Built with <a href=https://gohugo.io>Hugo</a>, using theme <a href=https://github.com/cissoid/hugo-theme-minimalism>Minimalism</a>.</div></div></footer><div id=mask><div id=loading><div></div></div></div><script src=/js/minimalism.js></script></body></html>

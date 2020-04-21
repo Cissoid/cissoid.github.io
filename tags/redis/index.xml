@@ -1,0 +1,134 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Redis on B-log</title><link>https://blog.wxh.me/tags/redis/</link><description>Recent content in Redis on B-log</description><generator>Hugo -- gohugo.io</generator><language>zh-cn</language><copyright>cissoid</copyright><lastBuildDate>Tue, 28 Mar 2017 16:18:52 +0800</lastBuildDate><atom:link href="https://blog.wxh.me/tags/redis/index.xml" rel="self" type="application/rss+xml"/><item><title>Redis 的一个文件描述符泄露 Bug</title><link>https://blog.wxh.me/post/2017/03/redis-file-descriptors-leak-bug/</link><pubDate>Tue, 28 Mar 2017 16:18:52 +0800</pubDate><guid>https://blog.wxh.me/post/2017/03/redis-file-descriptors-leak-bug/</guid><description>&lt;p>最近遇到了 Redis 中的一个 fd 泄露的 Bug, 经过一番排查后终于找到了原因,
+现将整个分析过程整理如下.&lt;/p>
+&lt;h1 id="1-查找问题">1. 查找问题&lt;/h1>
+&lt;p>一开始发现所有的服务都无法正常连接 Redis 后, 查看 Redis 日志, 发现大量如下错误:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-text" data-lang="text"># Error registering fd event for the new client: Numerical result out of range (fd=10247)
+# Error registering fd event for the new client: Numerical result out of range (fd=10247)
+# Error registering fd event for the new client: Numerical result out of range (fd=10247)
+...
+...
+...
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>从错误信息来看, 应当是耗尽了 fd 资源, 导致无法为新连接分配 fd. 可实际上为 Redis
+配置的 maxfd 有 10240, 而当时的连接数不过几百, 峰值连接数也不会超过 3000,
+正常情况下是不可能耗尽 fd 的.&lt;/p>
+&lt;p>继续查找最早出现问题的日志, 发现在 fd 异常的日志之前, 还有许多这样的错误日志:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-text" data-lang="text">* Starting automatic rewriting of AOF on 100% growth
+# Can&amp;#39;t rewrite append only file in background: fork: Cannot allocate memory
+* Starting automatic rewriting of AOF on 100% growth
+# Can&amp;#39;t rewrite append only file in background: fork: Cannot allocate memory
+* Starting automatic rewriting of AOF on 100% growth
+# Can&amp;#39;t rewrite append only file in background: fork: Cannot allocate memory
+...
+...
+...
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>这条错误日志的记录原因是因为重写 AOF 时内存不足导致失败, 很有可能 fd
+资源不足也是因为这个问题而并发产生的, 于是我在 Github 上查了一下 Issue,
+果然有人遇到了类似的情况:
+&lt;a href="https://github.com/antirez/redis/issues/2857">Error opening /setting AOF rewrite IPC pipes: Numerical result out of range&lt;/a>.&lt;/p>
+&lt;p>通过这个 issue, 很容易就找到了问题发生的原因: Redis 在 fork 子进程失败时没有关闭
+之前打开的管道, 导致 fd 泄露.&lt;/p>
+&lt;h1 id="2-分析源码">2. 分析源码&lt;/h1>
+&lt;p>Redis 在 3 种情况下会进行重写 aof 文件的操作:&lt;/p>
+&lt;ol>
+&lt;li>发送 &lt;code>BGREWRITEAOF&lt;/code> 命令主动发起重写.&lt;/li>
+&lt;li>将配置文件中的 &lt;code>appendonly&lt;/code> 选项由 no 改为 yes, 并且执行 &lt;code>CONFIG&lt;/code> 命令重载配置时.&lt;/li>
+&lt;li>当配置了 &lt;code>auto-aof-rewrite-percentage&lt;/code> 选项时, 会在满足条件时自动触发.&lt;/li>
+&lt;/ol>
+&lt;p>这里只分析第 3 种情况. 在
+&lt;a href="https://github.com/antirez/redis/blob/db8a945cbb861045428d39f960ace2bd99916a0b/src/server.c#L1092">serverCron&lt;/a>
+这个事件回调函数中, 可以看到如下代码:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-c" data-lang="c"> &lt;span style="color:#75715e">/* Trigger an AOF rewrite if needed */&lt;/span>
+&lt;span style="color:#66d9ef">if&lt;/span> (server.rdb_child_pid &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span> &lt;span style="color:#f92672">&amp;amp;&amp;amp;&lt;/span>
+server.aof_child_pid &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span> &lt;span style="color:#f92672">&amp;amp;&amp;amp;&lt;/span>
+server.aof_rewrite_perc &lt;span style="color:#f92672">&amp;amp;&amp;amp;&lt;/span>
+server.aof_current_size &lt;span style="color:#f92672">&amp;gt;&lt;/span> server.aof_rewrite_min_size)
+{
+&lt;span style="color:#66d9ef">long&lt;/span> &lt;span style="color:#66d9ef">long&lt;/span> base &lt;span style="color:#f92672">=&lt;/span> server.aof_rewrite_base_size &lt;span style="color:#f92672">?&lt;/span>
+server.aof_rewrite_base_size : &lt;span style="color:#ae81ff">1&lt;/span>;
+&lt;span style="color:#66d9ef">long&lt;/span> &lt;span style="color:#66d9ef">long&lt;/span> growth &lt;span style="color:#f92672">=&lt;/span> (server.aof_current_size&lt;span style="color:#f92672">*&lt;/span>&lt;span style="color:#ae81ff">100&lt;/span>&lt;span style="color:#f92672">/&lt;/span>base) &lt;span style="color:#f92672">-&lt;/span> &lt;span style="color:#ae81ff">100&lt;/span>;
+&lt;span style="color:#66d9ef">if&lt;/span> (growth &lt;span style="color:#f92672">&amp;gt;=&lt;/span> server.aof_rewrite_perc) {
+serverLog(LL_NOTICE,&lt;span style="color:#e6db74">&amp;#34;Starting automatic rewriting of AOF on %lld%% growth&amp;#34;&lt;/span>,growth);
+&lt;span style="color:#75715e">/* NOTE: 此处调用处理函数 */&lt;/span>
+rewriteAppendOnlyFileBackground();
+}
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>当 aof 文件增长率达到指定百分比时, 会自动调用
+&lt;a href="https://github.com/antirez/redis/blob/db8a945cbb861045428d39f960ace2bd99916a0b/src/aof.c#L1263">rewriteAppendOnlyFileBackground&lt;/a>
+函数. 这里需要注意两点:&lt;/p>
+&lt;ol>
+&lt;li>在该函数中调用 &lt;code>aofCreatePipes&lt;/code> 函数创建了 3 个管道用来与子进程通信.&lt;/li>
+&lt;li>子进程创建成功后, 将其 pid 存入了 &lt;code>server.aof_child_pid&lt;/code> 中.&lt;/li>
+&lt;/ol>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-c" data-lang="c">&lt;span style="color:#66d9ef">int&lt;/span> &lt;span style="color:#a6e22e">rewriteAppendOnlyFileBackground&lt;/span>(&lt;span style="color:#66d9ef">void&lt;/span>) {
+pid_t childpid;
+&lt;span style="color:#66d9ef">long&lt;/span> &lt;span style="color:#66d9ef">long&lt;/span> start;
+&lt;span style="color:#66d9ef">if&lt;/span> (server.aof_child_pid &lt;span style="color:#f92672">!=&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span> &lt;span style="color:#f92672">||&lt;/span> server.rdb_child_pid &lt;span style="color:#f92672">!=&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span>) &lt;span style="color:#66d9ef">return&lt;/span> C_ERR;
+&lt;span style="color:#75715e">/* NOTE: 调用 aofCreatePipes() 创建了 3 个管道. */&lt;/span>
+&lt;span style="color:#66d9ef">if&lt;/span> (aofCreatePipes() &lt;span style="color:#f92672">!=&lt;/span> C_OK) &lt;span style="color:#66d9ef">return&lt;/span> C_ERR;
+start &lt;span style="color:#f92672">=&lt;/span> ustime();
+&lt;span style="color:#66d9ef">if&lt;/span> ((childpid &lt;span style="color:#f92672">=&lt;/span> fork()) &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>) {
+&lt;span style="color:#75715e">/* hide */&lt;/span>
+} &lt;span style="color:#66d9ef">else&lt;/span> {
+&lt;span style="color:#75715e">/* Parent */&lt;/span>
+server.stat_fork_time &lt;span style="color:#f92672">=&lt;/span> ustime()&lt;span style="color:#f92672">-&lt;/span>start;
+server.stat_fork_rate &lt;span style="color:#f92672">=&lt;/span> (&lt;span style="color:#66d9ef">double&lt;/span>) zmalloc_used_memory() &lt;span style="color:#f92672">*&lt;/span> &lt;span style="color:#ae81ff">1000000&lt;/span> &lt;span style="color:#f92672">/&lt;/span> server.stat_fork_time &lt;span style="color:#f92672">/&lt;/span> (&lt;span style="color:#ae81ff">1024&lt;/span>&lt;span style="color:#f92672">*&lt;/span>&lt;span style="color:#ae81ff">1024&lt;/span>&lt;span style="color:#f92672">*&lt;/span>&lt;span style="color:#ae81ff">1024&lt;/span>); &lt;span style="color:#75715e">/* GB per second. */&lt;/span>
+latencyAddSampleIfNeeded(&lt;span style="color:#e6db74">&amp;#34;fork&amp;#34;&lt;/span>,server.stat_fork_time&lt;span style="color:#f92672">/&lt;/span>&lt;span style="color:#ae81ff">1000&lt;/span>);
+&lt;span style="color:#75715e">/* NOTE: fork 失败直接退出. */&lt;/span>
+&lt;span style="color:#66d9ef">if&lt;/span> (childpid &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span>) {
+serverLog(LL_WARNING,
+&lt;span style="color:#e6db74">&amp;#34;Can&amp;#39;t rewrite append only file in background: fork: %s&amp;#34;&lt;/span>,
+strerror(errno));
+&lt;span style="color:#66d9ef">return&lt;/span> C_ERR;
+}
+serverLog(LL_NOTICE,
+&lt;span style="color:#e6db74">&amp;#34;Background append only file rewriting started by pid %d&amp;#34;&lt;/span>,childpid);
+server.aof_rewrite_scheduled &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+server.aof_rewrite_time_start &lt;span style="color:#f92672">=&lt;/span> time(NULL);
+&lt;span style="color:#75715e">/* NOTE: 保存 pid. */&lt;/span>
+server.aof_child_pid &lt;span style="color:#f92672">=&lt;/span> childpid;
+updateDictResizePolicy();
+&lt;span style="color:#75715e">/* We set appendseldb to -1 in order to force the next call to the
+&lt;/span>&lt;span style="color:#75715e"> * feedAppendOnlyFile() to issue a SELECT command, so the differences
+&lt;/span>&lt;span style="color:#75715e"> * accumulated by the parent into server.aof_rewrite_buf will start
+&lt;/span>&lt;span style="color:#75715e"> * with a SELECT statement and it will be safe to merge. */&lt;/span>
+server.aof_selected_db &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span>;
+replicationScriptCacheFlush();
+&lt;span style="color:#66d9ef">return&lt;/span> C_OK;
+}
+&lt;span style="color:#66d9ef">return&lt;/span> C_OK; &lt;span style="color:#75715e">/* unreached */&lt;/span>
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>而对于这 3 个管道的回收工作, 是在
+&lt;a href="https://github.com/antirez/redis/blob/db8a945cbb861045428d39f960ace2bd99916a0b/src/aof.c#L1358">backgroundRewriteDoneHandler&lt;/a>
+中进行的, 这个函数还是在 &lt;code>serverCron&lt;/code> 函数中被调用:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-c" data-lang="c"> &lt;span style="color:#66d9ef">if&lt;/span> ((pid &lt;span style="color:#f92672">=&lt;/span> wait3(&lt;span style="color:#f92672">&amp;amp;&lt;/span>statloc,WNOHANG,NULL)) &lt;span style="color:#f92672">!=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>) {
+&lt;span style="color:#66d9ef">int&lt;/span> exitcode &lt;span style="color:#f92672">=&lt;/span> WEXITSTATUS(statloc);
+&lt;span style="color:#66d9ef">int&lt;/span> bysignal &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+&lt;span style="color:#66d9ef">if&lt;/span> (WIFSIGNALED(statloc)) bysignal &lt;span style="color:#f92672">=&lt;/span> WTERMSIG(statloc);
+&lt;span style="color:#66d9ef">if&lt;/span> (pid &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span>) {
+serverLog(LL_WARNING,&lt;span style="color:#e6db74">&amp;#34;wait3() returned an error: %s. &amp;#34;&lt;/span>
+&lt;span style="color:#e6db74">&amp;#34;rdb_child_pid = %d, aof_child_pid = %d&amp;#34;&lt;/span>,
+strerror(errno),
+(&lt;span style="color:#66d9ef">int&lt;/span>) server.rdb_child_pid,
+(&lt;span style="color:#66d9ef">int&lt;/span>) server.aof_child_pid);
+} &lt;span style="color:#66d9ef">else&lt;/span> &lt;span style="color:#66d9ef">if&lt;/span> (pid &lt;span style="color:#f92672">==&lt;/span> server.rdb_child_pid) {
+backgroundSaveDoneHandler(exitcode,bysignal);
+} &lt;span style="color:#66d9ef">else&lt;/span> &lt;span style="color:#66d9ef">if&lt;/span> (pid &lt;span style="color:#f92672">==&lt;/span> server.aof_child_pid) {
+&lt;span style="color:#75715e">/* NOTE: 这里调用清理函数. */&lt;/span>
+backgroundRewriteDoneHandler(exitcode,bysignal);
+} &lt;span style="color:#66d9ef">else&lt;/span> {
+&lt;span style="color:#66d9ef">if&lt;/span> (&lt;span style="color:#f92672">!&lt;/span>ldbRemoveChild(pid)) {
+serverLog(LL_WARNING,
+&lt;span style="color:#e6db74">&amp;#34;Warning, detected child with unmatched pid: %ld&amp;#34;&lt;/span>,
+(&lt;span style="color:#66d9ef">long&lt;/span>)pid);
+}
+}
+updateDictResizePolicy();
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>注意到执行 &lt;code>backgroundRewriteDoneHandler&lt;/code> 函数的条件是 &lt;code>pid == server.aof_child_pid&lt;/code>,
+而如果 fork 子进程失败 (如我们遇到的内存不足这种情况) 时, 之前创建的管道就不会被
+关闭了.&lt;/p>
+&lt;p>由于 &lt;code>serverCron&lt;/code> 函数默认配置下每秒会执行 10 次, 在出问题的情况下每次都会触发重
+写 aof 的机制, 每次都会泄露 3 个管道, 即 6 个 fd. 以这样的速度, 即使配置了 10240
+个 fd, 也只需要不到 3 分钟就能耗尽&amp;hellip;&lt;/p>
+&lt;p>这个问题已经在 2 月 20 日修复并合并到 3.2 分支的代码中, 但还没有发布新版本,
+也就是说在截止目前最新的 3.2.8 版本 Redis 中, 这个问题是仍未被修复的.&lt;/p></description></item></channel></rss>

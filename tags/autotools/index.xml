@@ -1,0 +1,112 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Autotools on B-log</title><link>https://blog.wxh.me/tags/autotools/</link><description>Recent content in Autotools on B-log</description><generator>Hugo -- gohugo.io</generator><language>zh-cn</language><copyright>cissoid</copyright><lastBuildDate>Mon, 21 Jul 2014 19:20:07 +0800</lastBuildDate><atom:link href="https://blog.wxh.me/tags/autotools/index.xml" rel="self" type="application/rss+xml"/><item><title>Autotools 简单使用教程</title><link>https://blog.wxh.me/post/2014/07/autotools-simple-tutotial/</link><pubDate>Mon, 21 Jul 2014 19:20:07 +0800</pubDate><guid>https://blog.wxh.me/post/2014/07/autotools-simple-tutotial/</guid><description>&lt;p>最近在学习 Autotools 的使用, 所以在网上找了一圈相关教程. 虽说也可以看官方文档, 但是内容实在是太多了&amp;hellip;不适合初次学习用. 后来发现了一个非常不错的教程: &lt;a href="http://markuskimius.wikidot.com/programming:tut:autotools">Autotools Tutorial for Beginners&lt;/a>. 这个教程非常简明地介绍了整套工具的使用流程, 但是编写的时间比较久了, 我在学习过程中发现 Autotools 工具已经做了一些修改, 使得这个教程已经不再适用. 因此将自己的学习过程做一记录.&lt;/p>
+&lt;h2 id="0-autotools-工具简单介绍">0. Autotools 工具简单介绍&lt;/h2>
+&lt;ol>
+&lt;li>&lt;code>autoscan&lt;/code> 生成 configure.scan.&lt;/li>
+&lt;li>重命名 configure.scan 为 configure.ac, 并修改其中 AC_INIT MACRO 对应的参数.&lt;/li>
+&lt;li>增加 &lt;code>AM_INIT_AUTOMAKE&lt;/code> MACRO 及 &lt;code>AC_CONFIG_FILES([Makefile])&lt;/code> MACRO.&lt;/li>
+&lt;li>&lt;code>aclocal&lt;/code>&lt;/li>
+&lt;li>&lt;code>autoheader&lt;/code> 生成 &lt;code>config.h.in&lt;/code>.&lt;/li>
+&lt;li>编写 &lt;code>Makefile.am&lt;/code>, &lt;code>automake&lt;/code> 生成 &lt;code>Makefile.in&lt;/code> 及其他文件.&lt;/li>
+&lt;li>&lt;code>./configure&lt;/code> 测试有无问题.&lt;/li>
+&lt;/ol>
+&lt;h2 id="1-简单的-hello-world-项目">1. 简单的 Hello World 项目.&lt;/h2>
+&lt;p>创建一个目录, 命名为 helloworld, 以此作为项目的根目录. 初始化项目结构如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">helloworld/
+├── Makefile
+└── src
+└── main.c
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>其中 main.c 代码如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-c" data-lang="c">&lt;span style="color:#75715e">#include&lt;/span> &lt;span style="color:#75715e">&amp;lt;stdio.h&amp;gt;&lt;/span>&lt;span style="color:#75715e">
+&lt;/span>&lt;span style="color:#75715e">&lt;/span>
+&lt;span style="color:#66d9ef">int&lt;/span> &lt;span style="color:#a6e22e">main&lt;/span>(&lt;span style="color:#66d9ef">int&lt;/span> argc, &lt;span style="color:#66d9ef">char&lt;/span> &lt;span style="color:#f92672">**&lt;/span>argv) {
+printf(&lt;span style="color:#e6db74">&amp;#34;Hello World&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">&amp;#34;&lt;/span>);
+&lt;span style="color:#66d9ef">return&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Makefile 代码如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">main:
+cc -o main src/main.c
+clean:
+rm -f main
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>非常简单的项目, 执行 &lt;code>make&lt;/code> 就可以编译生成可执行文件 main, 执行 &lt;code>./main&lt;/code> 就会打印出 &amp;ldquo;Hello World&amp;rdquo;, 执行 &lt;code>make clean&lt;/code> 就会删除编译好的 main 文件.&lt;/p>
+&lt;h2 id="2-使用-autoconf-生成-configure-文件">2. 使用 autoconf 生成 configure 文件&lt;/h2>
+&lt;h3 id="21-生成-configureac">2.1 生成 configure.ac&lt;/h3>
+&lt;p>configure 文件需要 autoconf 命令解析 configure.ac 文件生成, 而 configure.ac 文件可以使用 autoscan 命令来自动生成. 执行 &lt;code>autoscan&lt;/code> 后, 项目结构如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">helloworld/
+├── Makefile
+├── autoscan.log
+├── configure.scan
+└── src
+└── main.c
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到 autoscan 生成了 autoscan.log, configure.scan 两个文件, 而 configure.scan 实际上就是我们需要的 configure.ac 文件, 其内容如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback"># -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+AC_PREREQ([2.69])
+AC_INIT([FULL-PACKAGE-NAME], [VERSION], [BUG-REPORT-ADDRESS])
+AC_CONFIG_SRCDIR([src/main.c])
+AC_CONFIG_HEADERS([config.h])
+# Checks for programs.
+AC_PROG_CC
+# Checks for libraries.
+# Checks for header files.
+# Checks for typedefs, structures, and compiler characteristics.
+# Checks for library functions.
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>执行 &lt;code>mv configure.scan configure.ac&lt;/code> 将其重命名.&lt;/p>
+&lt;h3 id="22-生成-configure-文件">2.2 生成 configure 文件&lt;/h3>
+&lt;p>执行 &lt;code>autoconf&lt;/code>, 查看项目结构:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">helloworld/
+├── Makefile
+├── autom4te.cache
+│   ├── output.0
+│   ├── requests
+│   └── traces.0
+├── autoscan.log
+├── configure
+├── configure.ac
+└── src
+└── main.c
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>configure 文件已经成功生成.&lt;/p>
+&lt;h2 id="3-使用-autoheader-生成-configh">3. 使用 autoheader 生成 config.h.&lt;/h2>
+&lt;p>现在执行之前生成的 configure 文件, 会报如下错误:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables...
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether we are using the GNU C compiler... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to accept ISO C89... none needed
+configure: creating ./config.status
+config.status: error: cannot find input file: `Makefile.in&amp;#39;
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>提示缺少 Makefile.in 文件. 实际上 Makefile.in 文件就是 Makefile 文件, configure 执行时会将 Makefile.in 拷贝到 Makefile. 这里我们先简单地用自己的 Makefile 替代. 执行 &lt;code>mv Makefile Makefile.in&lt;/code> 后, 再次执行 configure 文件. 这次的错误如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables...
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether we are using the GNU C compiler... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to accept ISO C89... none needed
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: error: cannot find input file: `config.h.in&amp;#39;
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>提示缺少 config.h.in, 这个文件可以通过执行 autoheader 来获得. 执行 autoheader 后, 项目结构如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-fallback" data-lang="fallback">helloworld/
+├── Makefile
+├── Makefile.in
+├── autom4te.cache
+│   ├── output.0
+│   ├── requests
+│   └── traces.0
+├── autoscan.log
+├── config.h.in
+├── config.log
+├── config.status
+├── configure
+├── configure.ac
+└── src
+└── main.c
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>再次执行 &lt;code>./configure&lt;/code>.&lt;/p></description></item></channel></rss>

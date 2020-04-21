@@ -1,0 +1,224 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Python on B-log</title><link>https://blog.wxh.me/tags/python/</link><description>Recent content in Python on B-log</description><generator>Hugo -- gohugo.io</generator><language>zh-cn</language><copyright>cissoid</copyright><lastBuildDate>Tue, 26 Jan 2016 23:02:05 +0800</lastBuildDate><atom:link href="https://blog.wxh.me/tags/python/index.xml" rel="self" type="application/rss+xml"/><item><title>Supervisor 切换用户所引起的一个 Bug.</title><link>https://blog.wxh.me/post/2016/01/bug-caused-by-supervisor-user-configuration/</link><pubDate>Tue, 26 Jan 2016 23:02:05 +0800</pubDate><guid>https://blog.wxh.me/post/2016/01/bug-caused-by-supervisor-user-configuration/</guid><description>&lt;p>前两天在服务器上修改 supervisor 配置时遇到了一个很奇怪的 Bug,
+在这里将解决过程记录下来, 以作备忘.&lt;/p>
+&lt;h1 id="1-问题产生">1. 问题产生&lt;/h1>
+&lt;p>业务的部署方式是使用 gunicorn 做 wsgi 容器, 并托管在 supervisor 中执行.
+在之前为图方便, &lt;strong>supervisor 和 gunicorn 都是以 root 权限执行的&lt;/strong>.
+现在为了安全起见, 需要将 gunicorn 的执行权限改为普通用户, 在这里用户名以 cissoid
+代替. 具体的操作如下:&lt;/p>
+&lt;ol>
+&lt;li>切换代码及日志目录的所有者&lt;/li>
+&lt;/ol>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">chown -R cissoid:cissoid path/to/project
+chown -R cissoid:cissoid path/to/log
+&lt;/code>&lt;/pre>&lt;/div>&lt;ol start="2">
+&lt;li>修改 supervisord.conf, 将 &lt;code>user=root&lt;/code> 修改为 &lt;code>user=cissoid&lt;/code>, 并在 supervisor 中重启进程.&lt;/li>
+&lt;/ol>
+&lt;p>结果在执行第二步时, 发现进程无法启动, 改回 user 参数后又能正常启动.&lt;/p>
+&lt;h1 id="2-错误排查">2. 错误排查&lt;/h1>
+&lt;p>在 supervisor 中提示 &lt;code>ERROR (abnormal termination)&lt;/code>, 查看 supervisor 日志, 发现有如下日志:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">2016-01-25 21:10:42,206 INFO spawned: &amp;#39;test_server&amp;#39; with pid 27726
+2016-01-25 21:10:42,765 INFO exited: test_server (exit status 3; not expected)
+2016-01-25 21:10:43,773 INFO spawned: &amp;#39;test_server&amp;#39; with pid 27732
+2016-01-25 21:10:44,270 INFO exited: test_server (exit status 3; not expected)
+2016-01-25 21:10:46,278 INFO spawned: &amp;#39;test_server&amp;#39; with pid 27738
+2016-01-25 21:10:46,771 INFO exited: test_server (exit status 3; not expected)
+2016-01-25 21:10:49,781 INFO spawned: &amp;#39;test_server&amp;#39; with pid 27745
+2016-01-25 21:10:50,264 INFO exited: test_server (exit status 3; not expected)
+2016-01-25 21:10:51,266 INFO gave up: test_server entered FATAL state, too many start retries too quickly
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看出 supervisor 多次尝试重启进程均失败, 初步推断为 gunicorn 因为权限问题导致
+import 失败. 打开 gunicorn 的 debug 日志, 得到如下错误日志:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">2016-01-25 21:26:22 [11299] [INFO] Starting gunicorn 19.1.0
+2016-01-25 21:26:22 [11299] [DEBUG] Arbiter booted
+2016-01-25 21:26:22 [11299] [INFO] Listening at: http://0.0.0.0:8080 (27886)
+2016-01-25 21:26:22 [11299] [INFO] Using worker: gevent
+2016-01-25 21:26:22 [11304] [INFO] Booting worker with pid: 27887
+2016-01-25 21:26:22 [11299] [INFO] 1 workers
+2016-01-25 21:26:23 [11299] [INFO] Shutting down: Master
+2016-01-25 21:26:23 [11299] [INFO] Reason: Worker failed to boot.
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到 gunicorn 并没有记录任何异常! Worker 在创建后马上就退出了. 此时判断问题可能出在
+gevent 上, 于是用同样的参数手动执行 gunicorn, 结果代码正常地运行起来了&amp;hellip;&amp;hellip;&lt;/p>
+&lt;p>由于是使用同样的用户运行的代码, 能正常跑起来, 应该就可以排除权限的问题, 剩下最大的可能性是环境变量的问题.
+因此在代码中增加打印 os.environ 环境变量的语句后, 再次执行, 这次果然发现了问题:
+我是以 cissoid 用户在运行, 但是 HOME 的值是 /root/, USER 的值是 root, 也就是说运行时使用的是
+root 用户的环境变量. 于是我去查了下 supervisor 的文档, 发现果然如此:&lt;/p>
+&lt;blockquote>
+&lt;p>The user will be changed using setuid only. This does not start a login shell
+and does not change environment variables like USER or HOME.
+(&lt;a href="http://supervisord.org/configuration.html">http://supervisord.org/configuration.html&lt;/a>)&lt;/p>
+&lt;/blockquote>
+&lt;p>出错的原因找到了, 确实是因为环境变量引起的,
+那么环境变量不同为什么会造成这种现象呢? 继续在代码里增加一个全局的 try-catch,
+发现在 import MySQLdb 时抛了异常:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">ExtractionError: Can&amp;#39;t extract file(s) to egg cache
+The following error occurred while trying to extract file(s) to the Python egg cache:
+[Errno 13] Permission denied: &amp;#39;/root/.python-eggs&amp;#39;
+The Python egg cache directory is currently set to:
+/root/.python-eggs
+Perhaps your account does not have write access to this directory? You can change the cache directory by setting the PYTHON_EGG_CACHE environment variable to point to an accessible directory.
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>原因已经说得很明显了&amp;hellip;&lt;/p>
+&lt;h1 id="3-结论">3. 结论&lt;/h1>
+&lt;p>Python eggs 安装时会有一些 zip 压缩包, 这些压缩包在使用时会被解压到一个本地缓存目录,
+这个目录在默认的情况下是 ~/.python-eggs, 因此环境变量没有改变, 使得在 supervisor
+中切换用户后, 使用的缓存目录仍然是 /root/.python-eggs, 普通用户当然是没有这个目录的访问权限的.&lt;/p>
+&lt;p>不过很奇怪的地方在于, 异常没有在 gunicorn 中记录, 这个原因就需要有空再继续追查下去了.&lt;/p></description></item><item><title>Python 标准库笔记 —— __future__</title><link>https://blog.wxh.me/post/2015/09/python-standard-library-__future__/</link><pubDate>Fri, 11 Sep 2015 22:42:40 +0800</pubDate><guid>https://blog.wxh.me/post/2015/09/python-standard-library-__future__/</guid><description>&lt;p>__future__ 模块可以让一些老版本的 Python 使用新版本中的一些语法特性.
+例如在 2.5 版本中是不支持 with&amp;hellip;as&amp;hellip; 这样的语法进行上下文管理的,
+但是如果在代码中加入 &lt;code>from __future__ import with_statement&lt;/code>, 就可以让 2.5
+版本的 Python 也支持这个特性.&lt;/p>
+&lt;p>打开 __future__.py 文件, 可以看到其中支持 7 种这样的关键字特性, 分别是
+nested_scopes, generators, division, absolute_import, with_statement,
+print_function, unicode_literals.&lt;/p>
+&lt;h1 id="1-nested_scopes">1. nested_scopes&lt;/h1>
+&lt;p>从 PEP 227 的解释来看, nested_scopes 特性允许从代码外层的命名空间中引用变量.
+举例子而言, 有下面这段代码:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">&lt;span style="color:#75715e"># from __future__ import nested_scopes&lt;/span>
+&lt;span style="color:#66d9ef">def&lt;/span> &lt;span style="color:#a6e22e">main&lt;/span>():
+a &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>
+&lt;span style="color:#66d9ef">print&lt;/span> &lt;span style="color:#e6db74">&amp;#39;outer&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">globals: &lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">locals: &lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">a=&lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">&amp;#39;&lt;/span> &lt;span style="color:#f92672">%&lt;/span> (globals(), locals(), a)
+func &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#66d9ef">lambda&lt;/span>: &lt;span style="color:#e6db74">&amp;#39;inner&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">globals: &lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">locals: &lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">a=&lt;/span>&lt;span style="color:#e6db74">%s&lt;/span>&lt;span style="color:#ae81ff">\n&lt;/span>&lt;span style="color:#e6db74">&amp;#39;&lt;/span> &lt;span style="color:#f92672">%&lt;/span> (
+globals(), locals(), a)
+&lt;span style="color:#66d9ef">print&lt;/span> func()
+&lt;span style="color:#66d9ef">if&lt;/span> __name__ &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#e6db74">&amp;#39;__main__&amp;#39;&lt;/span>:
+main()
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>使用 2.1 版本的 Python 运行, 会返回&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">test_nested_scopes.py:3: SyntaxWarning: local name &amp;#39;a&amp;#39; in &amp;#39;main&amp;#39; shadows use of &amp;#39;a&amp;#39; as global in nested scope &amp;#39;lambda&amp;#39;
+def main():
+outer
+globals: {&amp;#39;__doc__&amp;#39;: None, &amp;#39;main&amp;#39;: &amp;lt;function main at 0271351C&amp;gt;, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;}
+locals: {}
+a=1
+Traceback (most recent call last):
+File &amp;#34;test_nested_scopes.py&amp;#34;, line 11, in ?
+main()
+File &amp;#34;test_nested_scopes.py&amp;#34;, line 8, in main
+print func()
+File &amp;#34;test_nested_scopes.py&amp;#34;, line 6, in &amp;lt;lambda&amp;gt;
+func = lambda: &amp;#39;inner\nglobals: %s\nlocals: %s\na=%s\n&amp;#39; % (
+NameError: global name &amp;#39;a&amp;#39; is not defined
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>执行时首先会报一个 SyntaxWarning, 并且在执行到 lambda 函数时, 会因为找不到变量 a
+而抛出 NameError.&lt;/p>
+&lt;p>而把第一行的注释取消掉后, 再次执行, 会返回&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">outer
+globals: {&amp;#39;nested_scopes&amp;#39;: Feature((2, 1, 0, &amp;#39;beta&amp;#39;, 1), (2, 2, 0, &amp;#39;final&amp;#39;, 0)), &amp;#39;__doc__&amp;#39;: None, &amp;#39;main&amp;#39;: &amp;lt;function main at 02693F5C&amp;gt;, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;}
+locals: {&amp;#39;a&amp;#39;: 1}
+a=1
+inner
+globals: {&amp;#39;nested_scopes&amp;#39;: Feature((2, 1, 0, &amp;#39;beta&amp;#39;, 1), (2, 2, 0, &amp;#39;final&amp;#39;, 0)), &amp;#39;__doc__&amp;#39;: None, &amp;#39;main&amp;#39;: &amp;lt;function main at 02693F5C&amp;gt;, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;}
+locals: {}
+a=1
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到, 在 lambda 函数内部, globals 和 locals 中都找不到变量 a, 然而却能取到 a
+的值, 这就是因为从外层命名空间中引用了变量.&lt;/p>
+&lt;p>有一个奇怪的问题是, 在 Python 2.7 中执行同样的代码, 返回的内容为&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">outer
+globals: {&amp;#39;nested_scopes&amp;#39;: _Feature((2, 1, 0, &amp;#39;beta&amp;#39;, 1), (2, 2, 0, &amp;#39;alpha&amp;#39;, 0), 16), &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;, &amp;#39;__file__&amp;#39;: &amp;#39;test_nested_scopes.py&amp;#39;, &amp;#39;__package__&amp;#39;: None, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;main&amp;#39;: &amp;lt;function main at 0x02A60C70&amp;gt;, &amp;#39;__doc__&amp;#39;: None}
+locals: {&amp;#39;a&amp;#39;: 1}
+a=1
+inner
+globals: {&amp;#39;nested_scopes&amp;#39;: _Feature((2, 1, 0, &amp;#39;beta&amp;#39;, 1), (2, 2, 0, &amp;#39;alpha&amp;#39;, 0), 16), &amp;#39;__builtins__&amp;#39;: &amp;lt;module &amp;#39;__builtin__&amp;#39; (built-in)&amp;gt;, &amp;#39;__file__&amp;#39;: &amp;#39;test_nested_scopes.py&amp;#39;, &amp;#39;__package__&amp;#39;: None, &amp;#39;__name__&amp;#39;: &amp;#39;__main__&amp;#39;, &amp;#39;main&amp;#39;: &amp;lt;function main at 0x02A60C70&amp;gt;, &amp;#39;__doc__&amp;#39;: None}
+locals: {&amp;#39;a&amp;#39;: 1}
+a=1
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到 lambda 函数内的 locals 中是有 a 的, 这与 2.1 版本的表现并不一致,
+不清楚是在哪个版本开始做的改动. 不过毕竟 nested_scopes 是一个老的特性, 就不去深究了&amp;hellip;&lt;/p>
+&lt;h1 id="2-generators">2. generators&lt;/h1>
+&lt;p>这个很简单, 加入了使用 yield 创建生成器的语法. 一个简单的例子:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">&lt;span style="color:#66d9ef">def&lt;/span> &lt;span style="color:#a6e22e">fab&lt;/span>(n):
+a &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>
+b &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>
+i &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>
+&lt;span style="color:#66d9ef">while&lt;/span> i &lt;span style="color:#f92672">&amp;lt;&lt;/span> n:
+&lt;span style="color:#66d9ef">yield&lt;/span> b
+a, b &lt;span style="color:#f92672">=&lt;/span> b, a &lt;span style="color:#f92672">+&lt;/span> b
+i &lt;span style="color:#f92672">+=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>
+&lt;span style="color:#66d9ef">def&lt;/span> &lt;span style="color:#a6e22e">main&lt;/span>():
+result &lt;span style="color:#f92672">=&lt;/span> fab(&lt;span style="color:#ae81ff">5&lt;/span>)
+&lt;span style="color:#66d9ef">print&lt;/span> type(result)
+&lt;span style="color:#66d9ef">for&lt;/span> i &lt;span style="color:#f92672">in&lt;/span> result:
+&lt;span style="color:#66d9ef">print&lt;/span> i
+&lt;span style="color:#66d9ef">if&lt;/span> __name__ &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#e6db74">&amp;#39;__main__&amp;#39;&lt;/span>:
+main()
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>运行它, 会输出&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">&amp;lt;type &amp;#39;generator&amp;#39;&amp;gt;
+1
+2
+3
+5
+8
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到, 使用了 yield 关键词的函数, 会成为一个生成器.&lt;/p>
+&lt;h1 id="3-division">3. division&lt;/h1>
+&lt;p>这个也很简单. 2.x 版本的 Python 中, 除号 &lt;code>/&lt;/code> 计算出的结果会是被除数和除数中精度更高的那一个类型,
+举一些例子:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">&amp;gt;&amp;gt;&amp;gt; 10 / 3
+3
+&amp;gt;&amp;gt;&amp;gt; 10L / 3
+3L
+&amp;gt;&amp;gt;&amp;gt; 10.0 / 3
+3.3333333333333335
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>因此, 除法结果的类型往往是难以预期的. 为了解决这个问题, 引入了新的计算符 &lt;code>//&lt;/code>.
+使用 &lt;code>/&lt;/code> 得出的结果始终是精确的, 而使用 &lt;code>//&lt;/code> 得出的结果始终是向下取整的(但类型仍然是两个数中相对高的那一个),
+这样就很明确了. 还是举一些例子:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">&amp;gt;&amp;gt;&amp;gt; from \_\_future\_\_ import division
+&amp;gt;&amp;gt;&amp;gt; 10 / 3
+3.3333333333333335
+&amp;gt;&amp;gt;&amp;gt; 10 // 3
+3
+&amp;gt;&amp;gt;&amp;gt; 10L // 3
+3L
+&amp;gt;&amp;gt;&amp;gt; 10.0 // 3
+3.0
+&amp;gt;&amp;gt;&amp;gt; -10.0 // 3
+-4.0
+&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="4-absolute_import">4. absolute_import&lt;/h1>
+&lt;p>这个功能也很容易理解. 简单地说, 它是为了解决这样一个问题：当我们在代码中写下
+&lt;code>import sys&lt;/code> 时, 怎样确定实际导入的是标准库中的 sys 模块, 或是当前文件夹下的
+sys.py 文件呢? 虽然几乎不会有人会起这样一个与标准库产生冲突的文件名,
+但也不得不承认, 这种 import 方式是会产生混淆的. absolute_import 绝对引用即是为了解决这个问题.
+还是用一个简单的例子试一下. 创建一个自定义的 package, 结构如下:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Text" data-lang="Text">package
+|-- __init__.py
+|-- main.py
+`-- sys.py
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>其中两个 Python 文件的内容都很简单:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">&lt;span style="color:#75715e"># filename: sys.py&lt;/span>
+&lt;span style="color:#66d9ef">print&lt;/span> &lt;span style="color:#e6db74">&amp;#39;Just imported a custom sys module.&amp;#39;&lt;/span>
+&lt;span style="color:#75715e"># filename: main.py&lt;/span>
+&lt;span style="color:#75715e"># from \_\_future\_\_ import absolute_import&lt;/span>
+&lt;span style="color:#f92672">import&lt;/span> sys
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>然后运行 main.py:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Bash" data-lang="Bash">$ python -m package.main
+Just imported custom sys module.
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>可以看到实际 import 的是自定义的 sys.py. 而当取消 main.py 中第一行的注释后再次执行&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Bash" data-lang="Bash">$ python -m package.main
+$
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>并没有输出任何内容, 说明导入的是标准库中的 sys 模块.&lt;/p>
+&lt;p>那么, 使用 absolute_import 后, 怎么样在 main.py 中导入自定义的 sys.py 呢? 有两种方法:&lt;/p>
+&lt;ol>
+&lt;li>&lt;code>from . import sys&lt;/code>, 这种引用方法就是所谓的相对引用(relative import),
+在之前这种引用方法是被强烈不建议使用的, 但现在相对宽容一点, 因为相对引用还是有适合使用的场景,
+当 package 更名时, 不需要大量修改代码.&lt;/li>
+&lt;li>&lt;code>from package import sys&lt;/code>, 这种引用方法是新的绝对引用, 即 import 路径必须以
+sys.path 里的路径为根路径开始寻找.&lt;/li>
+&lt;/ol>
+&lt;h1 id="5-with_statement">5. with_statement&lt;/h1>
+&lt;p>这个是让 Python 2.6 中正式加入的 with 语法在 2.5 中也能够使用. with
+语法的作用就是可以让对象自动完成一些初始化和清理工作. PEP 343 中已经有很直白的解释了.&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">&lt;span style="color:#66d9ef">with&lt;/span> EXPR &lt;span style="color:#66d9ef">as&lt;/span> VAR:
+BLOCK
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>相当于&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-Python" data-lang="Python">VAR &lt;span style="color:#f92672">=&lt;/span> EXPR
+VAR&lt;span style="color:#f92672">.&lt;/span>__enter__()
+&lt;span style="color:#66d9ef">try&lt;/span>:
+BLOCK
+&lt;span style="color:#66d9ef">finally&lt;/span>:
+VAR&lt;span style="color:#f92672">.&lt;/span>__exit__()
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>也就是在 BLOCK 执行前后分别自动执行了 __enter__ 和 __exit__ 方法.&lt;/p>
+&lt;p>另外, 标准库中的 contextlib 模块提供了 contextmanager 装饰器, 能够让函数也支持 with 语法.&lt;/p>
+&lt;h1 id="6-print_function">6. print_function&lt;/h1>
+&lt;p>将 print 语句变为 Python 3 中的函数形式. 这个没有什么好说的, 不过将 print
+语句改为函数形式调用这一点很赞, 因为 print 语句的语法很奇怪, 有时候很容易出问题.
+比如需要在 print 后不换行, 就要在 print 语句后加一个逗号 (&lt;code>print 'one',; print 'line'&lt;/code>);
+而使用 print 函数就可以很明确地使用 end 参数来设置 (&lt;code>print('one', end=' '); print('line')&lt;/code>).&lt;/p>
+&lt;h1 id="7-unicode_literals">7. unicode_literals&lt;/h1>
+&lt;p>同样是为了与 Python 3 的语法兼容而产生. 在 Python 2 中, 字符串默认为 str,
+而在字符串前加 u 才会是 unicode; 而在 Python 3 中, 字符串默认为 unicode,
+而在字符串前加 b 才会是 str. unicode_literals 作用就是在 Python 2 中使用
+Python 3 的这种风格.&lt;/p>
+&lt;p>小小吐槽一句, 在 Python 2 中 &lt;code>bytes is str&lt;/code> 返回的是 True! bytes 类型就是 str&amp;hellip;&lt;/p></description></item></channel></rss>

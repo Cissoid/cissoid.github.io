@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=theme-color content="#F5F7F9"><title>Autotools 简单使用教程 | B-log</title><link rel=stylesheet href=/css/minimalism.css><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-67524885-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body><header><div class=container><h1><a href=/>B-log</a></h1><nav><ul><li>&nbsp;|&nbsp;</li><li><a href=/post/>Post</a></li><li>&nbsp;|&nbsp;</li><li><a href=/about/>About</a></li><li>&nbsp;|&nbsp;</li></ul></nav></div><hr></header><main><article class=post><header><h1>Autotools 简单使用教程</h1><ul class=description><li><time>2014-07-21</time></li><li>&nbsp;|</li><li>&nbsp;#GNU</li><li>&nbsp;#Autotools</li></ul></header><section class=license><p><a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/><img alt="Creative Commons License" src=https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png></a><br>This work is licensed under a <a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/>Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.</p></section><section class=post><p>最近在学习 Autotools 的使用, 所以在网上找了一圈相关教程. 虽说也可以看官方文档, 但是内容实在是太多了&mldr;不适合初次学习用. 后来发现了一个非常不错的教程: <a href=http://markuskimius.wikidot.com/programming:tut:autotools>Autotools Tutorial for Beginners</a>. 这个教程非常简明地介绍了整套工具的使用流程, 但是编写的时间比较久了, 我在学习过程中发现 Autotools 工具已经做了一些修改, 使得这个教程已经不再适用. 因此将自己的学习过程做一记录.</p><h2 id=0-autotools-工具简单介绍>0. Autotools 工具简单介绍</h2><ol><li><code>autoscan</code> 生成 configure.scan.</li><li>重命名 configure.scan 为 configure.ac, 并修改其中 AC_INIT MACRO 对应的参数.</li><li>增加 <code>AM_INIT_AUTOMAKE</code> MACRO 及 <code>AC_CONFIG_FILES([Makefile])</code> MACRO.</li><li><code>aclocal</code></li><li><code>autoheader</code> 生成 <code>config.h.in</code>.</li><li>编写 <code>Makefile.am</code>, <code>automake</code> 生成 <code>Makefile.in</code> 及其他文件.</li><li><code>./configure</code> 测试有无问题.</li></ol><h2 id=1-简单的-hello-world-项目>1. 简单的 Hello World 项目.</h2><p>创建一个目录, 命名为 helloworld, 以此作为项目的根目录. 初始化项目结构如下:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>helloworld/
+├── Makefile
+└── src
+    └── main.c
+</code></pre></div><p>其中 main.c 代码如下:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;stdio.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>main</span>(<span style=color:#66d9ef>int</span> argc, <span style=color:#66d9ef>char</span> <span style=color:#f92672>**</span>argv) {
+    printf(<span style=color:#e6db74>&#34;Hello World</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>);
+    <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+}
+</code></pre></div><p>Makefile 代码如下:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>main:
+        cc -o main src/main.c
+
+clean:
+        rm -f main
+</code></pre></div><p>非常简单的项目, 执行 <code>make</code> 就可以编译生成可执行文件 main, 执行 <code>./main</code> 就会打印出 &ldquo;Hello World&rdquo;, 执行 <code>make clean</code> 就会删除编译好的 main 文件.</p><h2 id=2-使用-autoconf-生成-configure-文件>2. 使用 autoconf 生成 configure 文件</h2><h3 id=21-生成-configureac>2.1 生成 configure.ac</h3><p>configure 文件需要 autoconf 命令解析 configure.ac 文件生成, 而 configure.ac 文件可以使用 autoscan 命令来自动生成. 执行 <code>autoscan</code> 后, 项目结构如下:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>helloworld/
+├── Makefile
+├── autoscan.log
+├── configure.scan
+└── src
+    └── main.c
+</code></pre></div><p>可以看到 autoscan 生成了 autoscan.log, configure.scan 两个文件, 而 configure.scan 实际上就是我们需要的 configure.ac 文件, 其内容如下:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>#                                               -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+
+AC_PREREQ([2.69])
+AC_INIT([FULL-PACKAGE-NAME], [VERSION], [BUG-REPORT-ADDRESS])
+AC_CONFIG_SRCDIR([src/main.c])
+AC_CONFIG_HEADERS([config.h])
+
+# Checks for programs.
+AC_PROG_CC
+
+# Checks for libraries.
+
+# Checks for header files.
+
+# Checks for typedefs, structures, and compiler characteristics.
+
+# Checks for library functions.
+
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT
+</code></pre></div><p>执行 <code>mv configure.scan configure.ac</code> 将其重命名.</p><h3 id=22-生成-configure-文件>2.2 生成 configure 文件</h3><p>执行 <code>autoconf</code>, 查看项目结构:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>helloworld/
+├── Makefile
+├── autom4te.cache
+│   ├── output.0
+│   ├── requests
+│   └── traces.0
+├── autoscan.log
+├── configure
+├── configure.ac
+└── src
+    └── main.c
+</code></pre></div><p>configure 文件已经成功生成.</p><h2 id=3-使用-autoheader-生成-configh>3. 使用 autoheader 生成 config.h.</h2><p>现在执行之前生成的 configure 文件, 会报如下错误:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables...
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether we are using the GNU C compiler... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to accept ISO C89... none needed
+configure: creating ./config.status
+config.status: error: cannot find input file: `Makefile.in&#39;
+</code></pre></div><p>提示缺少 Makefile.in 文件. 实际上 Makefile.in 文件就是 Makefile 文件, configure 执行时会将 Makefile.in 拷贝到 Makefile. 这里我们先简单地用自己的 Makefile 替代. 执行 <code>mv Makefile Makefile.in</code> 后, 再次执行 configure 文件. 这次的错误如下:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables...
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether we are using the GNU C compiler... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to accept ISO C89... none needed
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: error: cannot find input file: `config.h.in&#39;
+</code></pre></div><p>提示缺少 config.h.in, 这个文件可以通过执行 autoheader 来获得. 执行 autoheader 后, 项目结构如下:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-fallback data-lang=fallback>helloworld/
+├── Makefile
+├── Makefile.in
+├── autom4te.cache
+│   ├── output.0
+│   ├── requests
+│   └── traces.0
+├── autoscan.log
+├── config.h.in
+├── config.log
+├── config.status
+├── configure
+├── configure.ac
+└── src
+    └── main.c
+</code></pre></div><p>再次执行 <code>./configure</code>.</p></section></article></main><footer><hr><div class=container><div class=copyright>&copy;2017-2019 By cissoid.</div><div class=about>Built with <a href=https://gohugo.io>Hugo</a>, using theme <a href=https://github.com/cissoid/hugo-theme-minimalism>Minimalism</a>.</div></div></footer><div id=mask><div id=loading><div></div></div></div><script src=/js/minimalism.js></script></body></html>

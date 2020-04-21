@@ -1,0 +1,64 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Hugo on B-log</title><link>https://blog.wxh.me/tags/hugo/</link><description>Recent content in Hugo on B-log</description><generator>Hugo -- gohugo.io</generator><language>zh-cn</language><copyright>cissoid</copyright><lastBuildDate>Mon, 30 Jan 2017 21:55:23 +0800</lastBuildDate><atom:link href="https://blog.wxh.me/tags/hugo/index.xml" rel="self" type="application/rss+xml"/><item><title>Minimalism -- 极简 Hugo Theme</title><link>https://blog.wxh.me/post/2017/01/hugo-theme-minimalism/</link><pubDate>Mon, 30 Jan 2017 21:55:23 +0800</pubDate><guid>https://blog.wxh.me/post/2017/01/hugo-theme-minimalism/</guid><description>&lt;p>最近把静态 Blog 生成工具由之前的 &lt;a href="https://hexo.io">Hexo&lt;/a> 切换到了 &lt;a href="https://gohugo.io">Hugo&lt;/a>,
+没有特别的原因, 只是因为相对于 nodejs, 更熟悉且更喜欢 golang 一些&amp;hellip;&lt;/p>
+&lt;p>切换过来的同时, 由于没有找到符合自己喜好的主题, 就尝试着自己摸索写了一个:
+&lt;a href="https://github.com/cissoid/hugo-theme-minimalism">Minimalism&lt;/a>, 使用 flexbox
+来解决排版及响应式的问题, 算是我这个前端苦手学习前端开发的第一步.&lt;/p>
+&lt;h1 id="文本">文本&lt;/h1>
+&lt;p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque venenatis eros ac varius blandit. Nunc pharetra tellus sed tortor imperdiet, pharetra feugiat felis finibus. Cras sit amet elit in nisi euismod congue. Nullam at quam sed sem semper pellentesque. Donec quis purus eu augue ornare venenatis. Ut sed eros nibh. Nullam mi elit, pharetra vel mi mollis, condimentum euismod urna. Pellentesque lorem felis, dapibus a tincidunt eget, rhoncus et diam. In ut metus in orci rhoncus efficitur nec venenatis ipsum.&lt;/p>
+&lt;p>&lt;em>Pellentesque eu risus et turpis dapibus congue et interdum metus. Nulla placerat, ante sit amet suscipit fermentum, justo urna tincidunt turpis, ac dignissim eros felis ut nisl. Integer metus metus, consectetur a justo dictum, finibus commodo diam. Nunc maximus nec lectus in semper. Donec libero sapien, convallis eu venenatis ac, vehicula eu justo. Curabitur velit risus, condimentum vel quam ut, pulvinar aliquet purus. Duis consequat massa sit amet dolor suscipit elementum id id tortor. Pellentesque venenatis convallis ipsum eu accumsan. Maecenas a dolor sem.&lt;/em>&lt;/p>
+&lt;p>&lt;strong>Nam turpis sem, facilisis eu rhoncus nec, mattis vel nunc. Nulla volutpat mauris vitae ipsum accumsan, quis scelerisque arcu volutpat. Suspendisse a ipsum non urna tempus volutpat. Proin interdum pretium mauris sit amet porta. Aliquam erat volutpat. Proin vel neque sem. Praesent tristique sit amet neque ac hendrerit. Sed porttitor, massa ac ultrices efficitur, dui metus consequat dolor, vitae consectetur massa leo eget enim. Nunc eu faucibus ipsum.&lt;/strong>&lt;/p>
+&lt;blockquote>
+&lt;p>Sed ut bibendum ipsum, non interdum erat. Fusce in porttitor velit. Nullam vitae elementum felis. Sed nec ultrices est. Nulla facilisis mattis nunc. Quisque leo nisi, pulvinar eget dignissim sit amet, porta vel ante. Phasellus pellentesque ac sem vitae pharetra. Phasellus efficitur sem eu felis euismod commodo eget et risus. Quisque sit amet tincidunt nibh. Nullam fermentum, odio vel venenatis egestas, risus tellus fermentum purus, eu accumsan massa velit quis est. Vestibulum sit amet sapien orci.&lt;/p>
+&lt;/blockquote>
+&lt;h1 id="图片">图片&lt;/h1>
+&lt;p>&lt;img src="https://images.unsplash.com/photo-1488764619428-8fc2aaf23eba?auto=format&amp;amp;w=1440&amp;amp;h=1080" alt="">&lt;/p>
+&lt;h1 id="列表">列表&lt;/h1>
+&lt;ol>
+&lt;li>Lorem ipsum dolor sit amet, consectetur adipiscing elit.&lt;/li>
+&lt;li>Mauris at libero convallis, tempus risus eu, malesuada urna.&lt;/li>
+&lt;li>In eu est ullamcorper, egestas metus sed, convallis neque.&lt;/li>
+&lt;li>Sed a dolor semper orci rutrum blandit ac vel nisi.&lt;/li>
+&lt;li>Praesent eget felis sit amet quam fringilla sodales ac a purus.&lt;/li>
+&lt;/ol>
+&lt;ul>
+&lt;li>Quisque fringilla nisi sed ipsum porta facilisis.&lt;/li>
+&lt;li>Vestibulum sollicitudin purus at tempor aliquet.&lt;/li>
+&lt;li>Morbi a nisi vel sapien gravida facilisis.&lt;/li>
+&lt;li>Donec posuere sem ut enim pretium luctus.&lt;/li>
+&lt;li>Donec ac mi fermentum, hendrerit libero et, egestas lacus.&lt;/li>
+&lt;/ul>
+&lt;h1 id="checklist">Checklist&lt;/h1>
+&lt;ul>
+&lt;li>&lt;input checked="" disabled="" type="checkbox"> &lt;a href="http://www.baidu.com">links&lt;/a>, &lt;strong>formatting&lt;/strong>, and &lt;!-- raw HTML omitted -->tags&lt;!-- raw HTML omitted --> supported&lt;/li>
+&lt;li>&lt;input checked="" disabled="" type="checkbox"> list syntax required (any unordered or ordered list supported)&lt;/li>
+&lt;li>&lt;input checked="" disabled="" type="checkbox"> this is a complete item&lt;/li>
+&lt;li>&lt;input disabled="" type="checkbox"> this is an incomplete item&lt;/li>
+&lt;/ul>
+&lt;h1 id="代码">代码&lt;/h1>
+&lt;p>I think you should use an &lt;code>&amp;lt;addr&amp;gt;&lt;/code> element here instead.&lt;/p>
+&lt;p>Press &lt;!-- raw HTML omitted -->Ctrl&lt;!-- raw HTML omitted --> + &lt;!-- raw HTML omitted -->C&lt;!-- raw HTML omitted -->.&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-python" data-lang="python">&lt;span style="color:#75715e">#!/usr/bin/env python&lt;/span>
+&lt;span style="color:#75715e"># coding: utf-8&lt;/span>
+&lt;span style="color:#66d9ef">def&lt;/span> &lt;span style="color:#a6e22e">main&lt;/span>():
+&lt;span style="color:#66d9ef">print&lt;/span>(&lt;span style="color:#e6db74">&amp;#39;Hello World&amp;#39;&lt;/span>)
+&lt;span style="color:#66d9ef">if&lt;/span> __name__ &lt;span style="color:#f92672">==&lt;/span> &lt;span style="color:#e6db74">&amp;#39;__main__&amp;#39;&lt;/span>:
+main()
+&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="表格">表格&lt;/h1>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th align="center">First Header&lt;/th>
+&lt;th align="center">Second Header&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td align="center">Content from cell 1&lt;/td>
+&lt;td align="center">Content from cell 2&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">Content in the first column&lt;/td>
+&lt;td align="center">Content in the second column&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table></description></item></channel></rss>

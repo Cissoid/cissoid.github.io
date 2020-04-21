@@ -1,0 +1,52 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=theme-color content="#F5F7F9"><title>Let's Encrypt 证书在 Nginx 上的配置方法 | B-log</title><link rel=stylesheet href=/css/minimalism.css><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-67524885-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body><header><div class=container><h1><a href=/>B-log</a></h1><nav><ul><li>&nbsp;|&nbsp;</li><li><a href=/post/>Post</a></li><li>&nbsp;|&nbsp;</li><li><a href=/about/>About</a></li><li>&nbsp;|&nbsp;</li></ul></nav></div><hr></header><main><article class=post><header><h1>Let's Encrypt 证书在 Nginx 上的配置方法</h1><ul class=description><li><time>2017-05-25</time></li><li>&nbsp;|</li><li>&nbsp;#Nginx</li><li>&nbsp;#Let's Encrypt</li></ul></header><section class=license><p><a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/><img alt="Creative Commons License" src=https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png></a><br>This work is licensed under a <a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/>Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.</p></section><section class=post><p>在现如今运营商劫持已变得司空见惯, 同时网络安全形势愈发严峻的大环境下, 为自己的网站上全站
+HTTPS 是很有必要的. 然而个人小站用每年 N 美刀的付费证书似乎又没有必要, 如果有免费的解决方案当然最好不过.</p><p>曾经有一个还不错的免费证书提供商 <a href=https://www.startssl.com>StartSSL</a>, 但后来,
+该公司被中国公司沃通 (WoSign) 收购, 并且做出了一些比较龌龊的事, 导致 Mozilla 和 Google
+都相继宣布不再信任该公司签发的证书, 所以现在还是放弃这家吧&mldr;</p><p>Let&rsquo;s Encrypt 算是最近几年比较流行的免费 HTTPS 证书方案了,
+但它的证书申请方式和其他一手交钱一手交货的证书分发机构不太一样, 因此在这里记录一下自己的申请过程.</p><h1 id=申请-lets-encrypt-证书>申请 Let&rsquo;s Encrypt 证书</h1><h3 id=1-安装-certbot>1. 安装 certbot.</h3><p><a href=https://letsencrypt.org>Let&rsquo;s Encrypt 官网</a> 推荐使用的 ACME 客户端是 <a href=https://certbot.eff.org>Certbot</a>,
+其在各个平台下的安装方法可见官网. Ubuntu 下, 可以直接添加 ppa 源进行安装:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-shell data-lang=shell>sudo apt-get install software-properties-common
+sudo add-apt-repository ppa:certbot/certbot
+sudo apt-get update
+sudo apt-get install certbot
+</code></pre></div><h3 id=2-配置-nginx-以便使用-webroot-方式申请证书>2. 配置 Nginx, 以便使用 webroot 方式申请证书.</h3><p>Certbot 提供了两种方式方式验证域名所有权:</p><ol><li>standalone 方式, 临时启动一个监听 443 端口的服务, Let&rsquo;s Encrypt
+服务器会访问这个服务来确认你是域名的所有者.</li><li>webroot 方式, 访问 <a href=http://yourdomain.com/.well-known/>http://yourdomain.com/.well-known/</a> 目录下的指定文件来验证身份.</li></ol><p>standalone 的方式看似要简单一点, 但有一个问题, 如果使用这种方式验证域名的话,
+以后更新证书时, 也需要用同样的方式, 所以如果你有业务监听 443 端口的话,
+每次更新证书时都要停掉业务&mldr;基本上, 还是不要用这种方式比较好.</p><p>为了使用 webroot 方式验证, 在 Nginx 中增加以下配置:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-nginx data-lang=nginx>    <span style=color:#66d9ef>location</span> ~ <span style=color:#e6db74>/.well-known</span> {
+        <span style=color:#f92672>root</span> <span style=color:#e6db74>/var/www/letsencrypt</span>;
+    }
+</code></pre></div><p>这里我把 webroot 路径设为 /var/www/letsencrypt. 当然也可以任意设置, 只要确认有访问权限即可.</p><h3 id=3-申请证书>3. 申请证书</h3><p>申请证书的步骤 Certbot 官网上都有, 无非就是执行 <code>sudo certbot certonly</code>
+后按照提示选择即可, 需要注意的是在输入 webroot 的地方需要填入上一步 Nginx
+中设置的 <code>root</code> 路径.</p><p>申请成功后, 证书放在 <code>/etc/letsencrypt/live/yourdomain.com/</code> 目录下, 包含 4 个文件:
+<code>privkey.pem</code>, <code>fullchain.pem</code>, <code>chain.pem</code>, <code>cert.pem</code>, 对每个文件的描述可见 README:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>This directory contains your keys and certificates.
+
+`privkey.pem`  : the private key for your certificate.
+`fullchain.pem`: the certificate file used in most server software.
+`chain.pem`    : used for OCSP stapling in Nginx &gt;=1.3.7.
+`cert.pem`     : will break many server configurations, and should not be used
+                 without reading further documentation (see link below).
+
+We recommend not moving these files. For more information, see the Certbot
+User Guide at https://certbot.eff.org/docs/using.html#where-are-my-certificates.
+</code></pre></div><h3 id=4-配置自动更新>4. 配置自动更新</h3><p>由于 Let&rsquo;s Encrypt 证书只有 3 个月的有效期, 到期前需要更新证书, 因此可以在 crontab
+中增加计划任务来自动做这件事. 执行 <code>sudo crontab -e</code> 后输入:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>0   2   *   *   *   /usr/bin/certbot renew -q --renew-hook &#34;/bin/systemctl reload nginx&#34; &gt;&gt;/var/log/certbot.log 2&gt;&amp;1 &amp;
+</code></pre></div><p>这个计划任务的作用是每天 2 点调用 certbot 自动更新证书, 若更新成功, 就重新加载 Nginx 配置.</p><p>至此, 证书就申请好了.</p><h1 id=在-nginx-中配置并使用证书>在 Nginx 中配置并使用证书</h1><p>由于 Nginx 默认使用的是 1024 位 的 DHE 密钥, 为了进一步加强连接的安全性,
+我们可以生成更高强度的密钥. 执行 <code>sudo openssl dhparam -out /etc/ssl/certs/dhparam.pem 4096</code>
+来生成 4096 位的密钥, 并保存到 <code>/etc/ssl/certs</code> 目录下.</p><p>在 Nginx 中增加以下配置:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-nginx data-lang=nginx><span style=color:#66d9ef>server</span> {
+    <span style=color:#f92672>ssl_certificate</span> <span style=color:#e6db74>/etc/letsencrypt/live/yourdomain.com/fullchain.pem</span>;
+    <span style=color:#f92672>ssl_certificate_key</span> <span style=color:#e6db74>/etc/letsencrypt/live/yourdomain.com/privkey.pem</span>;
+    <span style=color:#f92672>ssl_trusted_certificate</span> <span style=color:#e6db74>/etc/letsencrypt/live/yourdomain.com/chain.pem</span>;
+
+    <span style=color:#f92672>ssl_protocols</span> <span style=color:#e6db74>TLSv1</span> <span style=color:#e6db74>TLSv1.1</span> <span style=color:#e6db74>TLSv1.2</span>;
+    <span style=color:#f92672>ssl_prefer_server_ciphers</span> <span style=color:#66d9ef>on</span>;
+    <span style=color:#f92672>ssl_ciphers</span> <span style=color:#e6db74>&#34;EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH&#34;</span>;
+    <span style=color:#f92672>ssl_ecdh_curve</span> <span style=color:#e6db74>secp384r1</span>;
+    <span style=color:#f92672>ssl_session_cache</span> <span style=color:#e6db74>shared:SSL:10m</span>;
+    <span style=color:#f92672>ssl_session_tickets</span> <span style=color:#66d9ef>off</span>;
+    <span style=color:#f92672>ssl_stapling</span> <span style=color:#66d9ef>on</span>;
+    <span style=color:#f92672>ssl_stapling_verify</span> <span style=color:#66d9ef>on</span>;
+    <span style=color:#f92672>add_header</span> <span style=color:#e6db74>Strict-Transport-Security</span> <span style=color:#e6db74>&#34;max-age=63072000</span>; <span style=color:#f92672>includeSubDomains</span>; <span style=color:#f92672>preload&#34;</span>;
+    <span style=color:#f92672>add_header</span> <span style=color:#e6db74>X-Frame-Options</span> <span style=color:#e6db74>DENY</span>;
+    <span style=color:#f92672>add_header</span> <span style=color:#e6db74>X-Content-Type-Options</span> <span style=color:#e6db74>nosniff</span>;
+
+    <span style=color:#f92672>ssl_dhparam</span> <span style=color:#e6db74>/etc/ssl/certs/dhparam.pem</span>;
+}
+</code></pre></div><p>重新加载 Nginx 配置, 此时打开浏览器, 就可以看到地址栏的小绿锁了.</p><h1 id=参考>参考</h1><ul><li><a href=https://certbot.eff.org>https://certbot.eff.org</a></li><li><a href=https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-16-04>How To Secure Nginx with Let&rsquo;s Encrypt on Ubuntu 16.04</a></li></ul></section></article></main><footer><hr><div class=container><div class=copyright>&copy;2017-2019 By cissoid.</div><div class=about>Built with <a href=https://gohugo.io>Hugo</a>, using theme <a href=https://github.com/cissoid/hugo-theme-minimalism>Minimalism</a>.</div></div></footer><div id=mask><div id=loading><div></div></div></div><script src=/js/minimalism.js></script></body></html>
